@@ -71,14 +71,6 @@ This file can contain API keys and is intentionally ignored by Git.
 
 Settings can also be exported to a private Markdown profile from inside the plugin. Do not commit exported profiles if they include API keys.
 
-## Chinese Notes
+## Privacy
 
-此插件用於在 Obsidian 內進行 AI 寫作、Markdown 修改、新建筆記和 Vault 搜尋。
-
-BRAT 安裝地址：
-
-```text
-https://github.com/ktc-py/md-ai-writer
-```
-
-請不要把本機的 `data.json` 或含 API KEY 的設定檔提交到 GitHub。
+Do not commit local `data.json` files or exported settings profiles that contain API keys.
