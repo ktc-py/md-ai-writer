@@ -1,0 +1,17 @@
+{
+  "name": "md-ai-writer",
+  "version": "0.1.0",
+  "description": "Obsidian plugin for AI-assisted Markdown editing.",
+  "main": "main.js",
+  "scripts": {
+    "build": "node esbuild.config.mjs production",
+    "dev": "node esbuild.config.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "builtin-modules": "^3.3.0",
+    "esbuild": "^0.21.5",
+    "obsidian": "^1.5.12",
+    "typescript": "^5.4.5"
+  }
+}
