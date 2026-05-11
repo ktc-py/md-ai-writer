@@ -7,11 +7,14 @@ Plugin id: `md-ai-writer`
 ## Features
 
 - Chat, Edit, Search, and New modes in a compact command composer.
+- Slash mode switches: `/chat`, `/edit`, `/search`, and `/new`.
 - DeepSeek and custom OpenAI-compatible API endpoints.
 - Multiple saved custom providers and models.
 - AI file actions for creating, replacing, appending, and rewriting Markdown notes through Obsidian's Vault API.
-- Folder-scoped vault search with optional Voyage rerank support.
-- Current note and previous chat records can be attached as context.
+- Folder-scoped vault search with local prefiltering, optional Voyage rerank, and capped chat payloads.
+- Multiple Markdown notes and previous chat sessions can be attached as context.
+- Command to reference the current Markdown note, with default hotkey `Ctrl/Cmd+Shift+R`.
+- Saved chat history can be opened back into the chat panel as a session.
 - User-managed quick prompts through `/`.
 - Chinese and English UI language setting.
 - Configurable interface font.

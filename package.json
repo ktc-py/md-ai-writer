@@ -1,6 +1,6 @@
 {
   "name": "md-ai-writer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Obsidian plugin for AI-assisted Markdown editing.",
   "main": "main.js",
   "scripts": {

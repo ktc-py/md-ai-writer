@@ -61,10 +61,15 @@ interface ChatHistoryItem {
   prompt: string;
   createdAt: number;
   answer?: string;
+  turns?: SessionTurn[];
+  mode?: ChatMode;
+  provider?: string;
+  model?: string;
 }
 
 type ContextSelection =
   | { type: "file"; path: string }
+  | { type: "files"; paths: string[] }
   | { type: "history"; item: ChatHistoryItem };
 
 interface Settings {
@@ -135,6 +140,16 @@ const DEFAULT_UI_FONT = `"JetBrains Mono", "SFMono-Regular", "Cascadia Code", Co
 const MODE_IDS: ChatMode[] = ["chat", "edit", "knowledge", "new"];
 const DEFAULT_CUSTOM_PROVIDER_ID = "custom-1";
 const PACKYAPI_BASE_URL = "https://www.packyapi.com/v1";
+const MAX_CONTEXT_FILE_CHARS = 18000;
+const MAX_CONTEXT_TOTAL_CHARS = 52000;
+const MAX_HISTORY_CONTEXT_ANSWER_CHARS = 6000;
+const MAX_SESSION_TURNS = 8;
+const MAX_KNOWLEDGE_CANDIDATES = 80;
+const MAX_KNOWLEDGE_TOP_K = 12;
+const MAX_KNOWLEDGE_CHUNK_CHARS = 1200;
+const KNOWLEDGE_CHUNK_OVERLAP = 160;
+const MAX_VOYAGE_DOCUMENT_CHARS = 1400;
+const MAX_VOYAGE_TOTAL_CHARS = 90000;
 
 const UI_TEXT = {
   zh: {
@@ -378,6 +393,37 @@ export default class MdAiWriterPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: "mode-chat",
+      name: "NoteCraft AI: switch to Chat mode",
+      callback: () => void this.setActiveViewMode("chat")
+    });
+
+    this.addCommand({
+      id: "mode-edit",
+      name: "NoteCraft AI: switch to Edit mode",
+      callback: () => void this.setActiveViewMode("edit")
+    });
+
+    this.addCommand({
+      id: "mode-search",
+      name: "NoteCraft AI: switch to Search mode",
+      callback: () => void this.setActiveViewMode("knowledge")
+    });
+
+    this.addCommand({
+      id: "mode-new",
+      name: "NoteCraft AI: switch to New note mode",
+      callback: () => void this.setActiveViewMode("new")
+    });
+
+    this.addCommand({
+      id: "add-current-note-context",
+      name: "NoteCraft AI: reference current Markdown note",
+      hotkeys: [{ modifiers: ["Mod", "Shift"], key: "R" }],
+      callback: () => void this.addCurrentNoteToActiveViewContext()
+    });
+
+    this.addCommand({
       id: "insert-ai-answer",
       name: "AI 回答並插入到游標",
       editorCallback: (editor) => {
@@ -422,6 +468,21 @@ export default class MdAiWriterPlugin extends Plugin {
     const leaf = this.app.workspace.getRightLeaf(false);
     await leaf?.setViewState({ type: VIEW_TYPE, active: true });
     if (leaf) this.app.workspace.revealLeaf(leaf);
+  }
+
+  getOpenView(): AiWriterView | null {
+    const view = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0]?.view;
+    return view instanceof AiWriterView ? view : null;
+  }
+
+  async setActiveViewMode(mode: ChatMode) {
+    await this.activateView();
+    await this.getOpenView()?.setMode(mode);
+  }
+
+  async addCurrentNoteToActiveViewContext() {
+    await this.activateView();
+    this.getOpenView()?.addCurrentNoteContext();
   }
 
   async loadSettings() {
@@ -604,7 +665,8 @@ export default class MdAiWriterPlugin extends Plugin {
       return `${fallback}\n\n搜尋結果：未找到可引用的資料夾片段。`;
     }
 
-    const snippets = result.chunks.map((chunk, index) => {
+    const answerChunks = limitKnowledgeChunksForChat(result.chunks);
+    const snippets = answerChunks.map((chunk, index) => {
       return `[S${index + 1}] ${chunk.path}${chunk.title ? ` - ${chunk.title}` : ""}\n${chunk.text}`;
     }).join("\n\n---\n\n");
 
@@ -625,7 +687,7 @@ export default class MdAiWriterPlugin extends Plugin {
       }
     ];
     const answer = await this.requestChat(messages, false);
-    const sourceList = result.chunks
+    const sourceList = answerChunks
       .map((chunk, index) => `- [S${index + 1}] ${chunk.path}${chunk.title ? ` - ${chunk.title}` : ""}`)
       .join("\n");
     return `${answer}\n\n來源片段：\n${sourceList}`;
@@ -639,8 +701,8 @@ export default class MdAiWriterPlugin extends Plugin {
       allChunks.push(...chunkMarkdown(file.path, content));
     }
 
-    const maxCandidates = clampNumber(this.settings.knowledgeMaxCandidates, 10, 200, DEFAULT_SETTINGS.knowledgeMaxCandidates);
-    const topK = clampNumber(this.settings.knowledgeTopK, 1, 20, DEFAULT_SETTINGS.knowledgeTopK);
+    const maxCandidates = clampNumber(this.settings.knowledgeMaxCandidates, 5, MAX_KNOWLEDGE_CANDIDATES, DEFAULT_SETTINGS.knowledgeMaxCandidates);
+    const topK = clampNumber(this.settings.knowledgeTopK, 1, MAX_KNOWLEDGE_TOP_K, DEFAULT_SETTINGS.knowledgeTopK);
     const candidates = takeDiverseKnowledgeChunks(rankKnowledgeChunks(prompt, allChunks), maxCandidates, 2);
     if (!candidates.length) return { chunks: [], method: "local lexical search" };
 
@@ -657,7 +719,9 @@ export default class MdAiWriterPlugin extends Plugin {
   }
 
   async rerankWithVoyage(query: string, chunks: KnowledgeChunk[], topK: number): Promise<KnowledgeChunk[]> {
-    const documents = chunks.map((chunk) => `${chunk.path}${chunk.title ? ` - ${chunk.title}` : ""}\n${chunk.text}`);
+    const voyageChunks = limitKnowledgeChunksForVoyage(chunks);
+    const documents = voyageChunks.map((chunk) => `${chunk.path}${chunk.title ? ` - ${chunk.title}` : ""}\n${chunk.text}`);
+    if (!documents.length) return [];
     const response = await requestUrl({
       url: "https://api.voyageai.com/v1/rerank",
       method: "POST",
@@ -683,7 +747,7 @@ export default class MdAiWriterPlugin extends Plugin {
     return rows
       .map((row) => {
         const index = typeof row.index === "number" ? row.index : -1;
-        const base = chunks[index];
+        const base = voyageChunks[index];
         if (!base) return null;
         return {
           ...base,
@@ -879,7 +943,14 @@ export default class MdAiWriterPlugin extends Plugin {
     const selection = view.editor.getSelection();
     const body = selection.trim() ? selection : await this.app.vault.read(file);
     const mode = selection.trim() ? "selected text from active note" : "full active note";
-    return `<active_note path="${file.path}" mode="${mode}">\n${body}\n</active_note>`;
+    return formatMarkdownContextBlock("active_note", file.path, mode, body);
+  }
+
+  async getFileContext(path: string): Promise<string> {
+    const file = this.app.vault.getAbstractFileByPath(normalizePath(path));
+    if (!(file instanceof TFile)) return "";
+    const body = await this.app.vault.cachedRead(file);
+    return formatMarkdownContextBlock("context_note", file.path, "referenced Markdown note", body);
   }
 
   async editActiveNote(prompt: string) {
@@ -932,30 +1003,48 @@ export default class MdAiWriterPlugin extends Plugin {
     new Notice(`已套用 ${actions.length} 個 AI 操作。`);
   }
 
-  async rememberPrompt(prompt: string) {
+  async rememberPrompt(prompt: string): Promise<ChatHistoryItem> {
     const title = prompt.split("\n")[0].trim().slice(0, 60) || "Untitled chat";
+    const item: ChatHistoryItem = { title, prompt, createdAt: Date.now() };
     this.settings.chatHistory = [
-      { title, prompt, createdAt: Date.now() },
-      ...this.settings.chatHistory.filter((item) => item.prompt !== prompt)
+      item,
+      ...this.settings.chatHistory
     ].slice(0, 50);
     await this.saveSettings();
+    return item;
   }
 
-  async rememberAssistantAnswer(prompt: string, answer: string) {
-    const item = this.settings.chatHistory.find((entry) => entry.prompt === prompt);
+  async rememberAssistantAnswer(prompt: string, answer: string, turns: SessionTurn[] = [], metadata?: { mode?: ChatMode; provider?: string; model?: string }) {
+    const item = this.settings.chatHistory.find((entry) => entry.prompt === prompt && !entry.answer)
+      ?? this.settings.chatHistory.find((entry) => entry.prompt === prompt);
     if (!item) return;
     item.answer = answer.slice(0, 16000);
+    item.turns = turns.map((turn) => ({
+      prompt: turn.prompt,
+      answer: turn.answer.slice(0, MAX_HISTORY_CONTEXT_ANSWER_CHARS)
+    }));
+    item.mode = metadata?.mode;
+    item.provider = metadata?.provider;
+    item.model = metadata?.model;
     await this.saveSettings();
   }
 
   formatHistoryContext(item: ChatHistoryItem): string {
     const time = formatMemoryTime(new Date(item.createdAt));
-    return `<chat_history title="${escapeXmlAttr(item.title)}" time="${time}">
+    const turns = item.turns?.length
+      ? item.turns.map((turn, index) => `Turn ${index + 1}
 User:
+${turn.prompt}
+
+Assistant:
+${turn.answer || "(No assistant answer saved for this turn.)"}`).join("\n\n---\n\n")
+      : `User:
 ${item.prompt}
 
 Assistant:
-${item.answer?.trim() || "(No assistant answer saved for this older record.)"}
+${item.answer?.trim() || "(No assistant answer saved for this older record.)"}`;
+    return `<chat_history title="${escapeXmlAttr(item.title)}" time="${time}">
+${turns}
 </chat_history>`;
   }
 
@@ -1028,6 +1117,7 @@ class AiWriterView extends ItemView {
   contextLabelEl: HTMLElement;
   sendButton: HTMLButtonElement;
   useActiveNoteContext = true;
+  fileContextPaths: string[] = [];
   historyContextItems: ChatHistoryItem[] = [];
   sessionTurns: SessionTurn[] = [];
   mode: ChatMode;
@@ -1067,7 +1157,7 @@ class AiWriterView extends ItemView {
     const composerTools = composerHeader.createDiv({ cls: "md-ai-writer-send-actions" });
     composerTools.createEl("button", { cls: "md-ai-writer-slash-button", text: "/", attr: { title: uiText(this.plugin.settings, "quickPrompts") } }).onclick = () => this.showPromptMenu();
     this.iconButton(composerTools, "plus", uiText(this.plugin.settings, "newChat"), () => this.clearChat());
-    this.iconButton(composerTools, "history", uiText(this.plugin.settings, "history"), () => new ChatHistoryModal(this.app, this.plugin, (prompt) => this.usePrompt(prompt)).open());
+    this.iconButton(composerTools, "history", uiText(this.plugin.settings, "history"), () => new ChatHistoryModal(this.app, this.plugin, (item) => this.loadHistoryItem(item)).open());
     this.iconButton(composerTools, "sliders-horizontal", uiText(this.plugin.settings, "settings"), () => new ChatSettingsModal(this.app, this.plugin, () => this.refreshModelButton()).open());
 
     this.modeSelector = composer.createDiv({ cls: "md-ai-writer-mode-selector md-ai-writer-mode-selector-inline" });
@@ -1095,7 +1185,9 @@ class AiWriterView extends ItemView {
         void this.ask();
       }
       if (event.key === "/" && this.inputEl.value.trim() === "") {
-        window.setTimeout(() => this.showPromptMenu(), 0);
+        window.setTimeout(() => {
+          if (this.inputEl.value.trim() === "/") this.showPromptMenu();
+        }, 250);
       }
     });
 
@@ -1175,7 +1267,10 @@ class AiWriterView extends ItemView {
   }
 
   refreshModeUi() {
-    if (this.subtitleEl) this.subtitleEl.setText("");
+    if (this.subtitleEl) {
+      const label = modeLabel(this.plugin.settings, this.mode);
+      this.subtitleEl.setText(this.plugin.settings.uiLanguage === "en" ? `Mode: ${label}` : `目前模式：${label}`);
+    }
     if (this.modeSelector) {
       for (const button of Array.from(this.modeSelector.querySelectorAll("button"))) {
         button.toggleClass("is-active", button.dataset.mode === this.mode);
@@ -1260,6 +1355,7 @@ class AiWriterView extends ItemView {
 
   renderContextChips() {
     const view = this.plugin.getActiveMarkdownView();
+    const activePath = view?.file?.path;
     this.contextChip.empty();
     let count = 0;
 
@@ -1272,6 +1368,20 @@ class AiWriterView extends ItemView {
       remove.onclick = (event) => {
         event.stopPropagation();
         this.useActiveNoteContext = false;
+        this.refreshContextLabel();
+      };
+    }
+
+    for (const path of this.fileContextPaths) {
+      if (this.useActiveNoteContext && activePath === path) continue;
+      count++;
+      const chip = this.contextChip.createDiv({ cls: "md-ai-writer-context-chip" });
+      setIcon(chip.createSpan(), "file-text");
+      chip.createSpan({ text: ` ${path} ` });
+      const remove = chip.createEl("button", { cls: "md-ai-writer-chip-remove", text: "x", attr: { title: uiText(this.plugin.settings, "removeCurrentContext") } });
+      remove.onclick = (event) => {
+        event.stopPropagation();
+        this.fileContextPaths = this.fileContextPaths.filter((entry) => entry !== path);
         this.refreshContextLabel();
       };
     }
@@ -1329,9 +1439,30 @@ class AiWriterView extends ItemView {
     }
   }
 
+  addFileContexts(paths: string[]) {
+    const valid = paths
+      .map((path) => normalizePath(path))
+      .filter((path) => this.app.vault.getAbstractFileByPath(path) instanceof TFile);
+    this.fileContextPaths = Array.from(new Set([...this.fileContextPaths, ...valid]));
+    this.refreshContextLabel();
+  }
+
+  addCurrentNoteContext() {
+    const file = this.plugin.getActiveMarkdownView()?.file;
+    if (!file) {
+      new Notice(this.plugin.settings.uiLanguage === "en" ? "No active Markdown note to reference." : "沒有可引用的當前 Markdown。");
+      return;
+    }
+    this.addFileContexts([file.path]);
+  }
+
   async useContextSelection(selection: ContextSelection) {
     if (selection.type === "file") {
-      await this.openFileByPath(selection.path);
+      this.addFileContexts([selection.path]);
+      return;
+    }
+    if (selection.type === "files") {
+      this.addFileContexts(selection.paths);
       return;
     }
     if (!this.historyContextItems.some((item) => item.createdAt === selection.item.createdAt)) {
@@ -1353,17 +1484,43 @@ class AiWriterView extends ItemView {
       const active = await this.plugin.getActiveContext();
       if (active) parts.push(active);
     }
+    const activePath = this.useActiveNoteContext ? this.plugin.getActiveMarkdownView()?.file?.path : undefined;
+    for (const path of this.fileContextPaths) {
+      if (path === activePath) continue;
+      const context = await this.plugin.getFileContext(path);
+      if (context) parts.push(context);
+    }
     for (const item of this.historyContextItems) {
       parts.push(this.plugin.formatHistoryContext(item));
     }
-    return parts.join("\n\n");
+    return limitContextParts(parts);
   }
 
   recordAssistantAnswer(prompt: string, answer: string) {
-    this.sessionTurns.push({ prompt, answer: answer.slice(0, 6000) });
-    this.sessionTurns = this.sessionTurns.slice(-8);
-    void this.plugin.rememberAssistantAnswer(prompt, answer);
+    this.sessionTurns.push({ prompt, answer: answer.slice(0, MAX_HISTORY_CONTEXT_ANSWER_CHARS) });
+    this.sessionTurns = this.sessionTurns.slice(-MAX_SESSION_TURNS);
+    const config = this.plugin.getProviderConfig();
+    void this.plugin.rememberAssistantAnswer(prompt, answer, this.sessionTurns, {
+      mode: this.mode,
+      provider: this.plugin.getProviderDisplayName(),
+      model: config.model
+    });
     void this.plugin.writeMemorySummary(prompt, answer);
+  }
+
+  loadHistoryItem(item: ChatHistoryItem) {
+    this.clearChat();
+    const turns = item.turns?.length ? item.turns : [{ prompt: item.prompt, answer: item.answer ?? "" }];
+    for (const turn of turns) {
+      if (turn.prompt) this.addLog("user", turn.prompt);
+      if (turn.answer) this.addLog("assistant", turn.answer);
+    }
+    this.sessionTurns = turns
+      .filter((turn) => turn.prompt || turn.answer)
+      .map((turn) => ({ prompt: turn.prompt, answer: (turn.answer ?? "").slice(0, MAX_HISTORY_CONTEXT_ANSWER_CHARS) }))
+      .slice(-MAX_SESSION_TURNS);
+    if (!turns.some((turn) => turn.answer) && item.prompt) this.inputEl.value = item.prompt;
+    this.refreshContextLabel();
   }
 
   addProgress(message: string): HTMLPreElement {
@@ -1380,8 +1537,18 @@ class AiWriterView extends ItemView {
   }
 
   async ask() {
-    const prompt = this.inputEl.value.trim();
+    let prompt = this.inputEl.value.trim();
     if (!prompt) return;
+    const modeCommand = parseModeCommand(prompt);
+    if (modeCommand) {
+      await this.setMode(modeCommand.mode);
+      prompt = modeCommand.prompt.trim();
+      if (!prompt) {
+        this.inputEl.value = "";
+        this.addLog("assistant", modeSwitchMessage(this.plugin.settings, this.mode));
+        return;
+      }
+    }
     this.refreshContextLabel();
     this.inputEl.value = "";
     this.addLog("user", prompt);
@@ -1403,6 +1570,7 @@ class AiWriterView extends ItemView {
       if (this.mode === "edit") {
         this.updateProgress(progress, uiText(this.plugin.settings, "progressEdit"));
         const actions = await this.plugin.planEditCurrentNote(prompt);
+        if (!actions.length) throw new Error(fileActionMissingMessage(this.plugin.settings, "edit"));
         this.updateProgress(progress, uiText(this.plugin.settings, "progressConfirmEdit"));
         await this.plugin.applyActions(actions);
         const message = actions.length ? uiText(this.plugin.settings, "editDone") : uiText(this.plugin.settings, "editNoActions");
@@ -1421,6 +1589,7 @@ class AiWriterView extends ItemView {
       if (this.mode === "new") {
         this.updateProgress(progress, uiText(this.plugin.settings, "progressNew"));
         const actions = await this.plugin.planNewNote(prompt, context);
+        if (!actions.length) throw new Error(fileActionMissingMessage(this.plugin.settings, "new"));
         this.updateProgress(progress, uiText(this.plugin.settings, "progressConfirmNew"));
         await this.plugin.applyActions(actions);
         const message = actions.length ? uiText(this.plugin.settings, "newDone") : uiText(this.plugin.settings, "newNoActions");
@@ -1798,10 +1967,10 @@ class ChatSettingsModal extends Modal {
 
 class ChatHistoryModal extends Modal {
   plugin: MdAiWriterPlugin;
-  onSelect: (prompt: string) => void;
+  onSelect: (item: ChatHistoryItem) => void;
   selected = new Set<number>();
 
-  constructor(app: App, plugin: MdAiWriterPlugin, onSelect: (prompt: string) => void) {
+  constructor(app: App, plugin: MdAiWriterPlugin, onSelect: (item: ChatHistoryItem) => void) {
     super(app);
     this.plugin = plugin;
     this.onSelect = onSelect;
@@ -1838,7 +2007,7 @@ class ChatHistoryModal extends Modal {
         main.createSpan({ text: item.title || item.prompt?.slice(0, 60) || (isEn ? "Untitled chat" : "未命名對話") });
         main.createSpan({ cls: "md-ai-writer-model-provider", text: formatMemoryTime(new Date(item.createdAt)) });
         main.onclick = () => {
-          this.onSelect(item.prompt);
+          this.onSelect(item);
           this.close();
         };
         row.createEl("button", { cls: "md-ai-writer-history-delete", text: isEn ? "Delete" : "刪除" }).onclick = async () => {
@@ -1883,7 +2052,7 @@ class ChatHistoryModal extends Modal {
         row.createSpan({ text: "◌" });
         row.createSpan({ text: item.title });
         row.onclick = () => {
-          this.onSelect(item.prompt);
+          this.onSelect(item);
           this.close();
         };
       }
@@ -1897,6 +2066,7 @@ class ChatHistoryModal extends Modal {
 class ContextPickerModal extends Modal {
   plugin: MdAiWriterPlugin;
   onSelect: (selection: ContextSelection) => void;
+  selectedFiles = new Set<string>();
 
   constructor(app: App, plugin: MdAiWriterPlugin, onSelect: (selection: ContextSelection) => void) {
     super(app);
@@ -1909,17 +2079,24 @@ class ContextPickerModal extends Modal {
     this.contentEl.addClass("md-ai-writer-history");
     const isEn = this.plugin.settings.uiLanguage === "en";
     const search = this.contentEl.createEl("input", { attr: { placeholder: isEn ? "Search Markdown files or chat history..." : "搜尋 Markdown 文件或歷史交流..." } });
+    const actions = this.contentEl.createDiv({ cls: "md-ai-writer-history-actions" });
+    const addSelected = actions.createEl("button", { text: isEn ? "Add selected files" : "加入已選文件" });
+    const clearSelected = actions.createEl("button", { text: isEn ? "Clear selection" : "清除選取" });
     const list = this.contentEl.createDiv();
     const render = () => {
       list.empty();
       const query = search.value.toLowerCase();
       for (const file of this.app.vault.getMarkdownFiles().filter((entry) => entry.path.toLowerCase().includes(query)).slice(0, 80)) {
-        const row = list.createEl("button", { cls: "md-ai-writer-history-row" });
-        setIcon(row.createSpan(), "file-text");
-        row.createSpan({ text: file.path });
+        const row = list.createDiv({ cls: "md-ai-writer-history-row md-ai-writer-history-manage-row" });
+        const checkbox = row.createEl("input", { attr: { type: "checkbox" } });
+        checkbox.checked = this.selectedFiles.has(file.path);
+        const main = row.createEl("button", { cls: "md-ai-writer-history-main" });
+        setIcon(main.createSpan(), "file-text");
+        main.createSpan({ text: file.path });
         row.onclick = () => {
-          this.onSelect({ type: "file", path: file.path });
-          this.close();
+          if (this.selectedFiles.has(file.path)) this.selectedFiles.delete(file.path);
+          else this.selectedFiles.add(file.path);
+          render();
         };
       }
       for (const item of this.plugin.settings.chatHistory.filter((entry) => historyMatchesQuery(entry, query)).slice(0, 40)) {
@@ -1931,6 +2108,15 @@ class ContextPickerModal extends Modal {
           this.close();
         };
       }
+    };
+    addSelected.onclick = () => {
+      if (!this.selectedFiles.size) return;
+      this.onSelect({ type: "files", paths: Array.from(this.selectedFiles) });
+      this.close();
+    };
+    clearSelected.onclick = () => {
+      this.selectedFiles.clear();
+      render();
     };
     search.oninput = render;
     render();
@@ -2510,7 +2696,7 @@ class MdAiWriterSettingTab extends PluginSettingTab {
       .setDesc(isEn ? "Number of locally filtered snippets sent to Voyage rerank. Higher values cost more." : "本地預篩後送入 Voyage rerank 的片段數，越大越貴。")
       .addText((text) =>
         text.setValue(String(this.plugin.settings.knowledgeMaxCandidates)).onChange(async (value) => {
-          this.plugin.settings.knowledgeMaxCandidates = clampNumber(Number(value), 10, 200, DEFAULT_SETTINGS.knowledgeMaxCandidates);
+          this.plugin.settings.knowledgeMaxCandidates = clampNumber(Number(value), 5, MAX_KNOWLEDGE_CANDIDATES, DEFAULT_SETTINGS.knowledgeMaxCandidates);
           await this.plugin.saveSettings();
         })
       );
@@ -2520,7 +2706,7 @@ class MdAiWriterSettingTab extends PluginSettingTab {
       .setDesc(isEn ? "Final number of snippets passed to the chat model." : "最終交給聊天模型的片段數。")
       .addText((text) =>
         text.setValue(String(this.plugin.settings.knowledgeTopK)).onChange(async (value) => {
-          this.plugin.settings.knowledgeTopK = clampNumber(Number(value), 1, 20, DEFAULT_SETTINGS.knowledgeTopK);
+          this.plugin.settings.knowledgeTopK = clampNumber(Number(value), 1, MAX_KNOWLEDGE_TOP_K, DEFAULT_SETTINGS.knowledgeTopK);
           await this.plugin.saveSettings();
         })
       );
@@ -2920,8 +3106,8 @@ function normalizeSettings(raw: unknown): Settings {
     knowledgeFolders: Array.isArray(saved.knowledgeFolders) ? saved.knowledgeFolders.filter((folder) => typeof folder === "string") : DEFAULT_SETTINGS.knowledgeFolders,
     voyageApiKey: typeof saved.voyageApiKey === "string" ? saved.voyageApiKey : DEFAULT_SETTINGS.voyageApiKey,
     voyageRerankModel: typeof saved.voyageRerankModel === "string" ? saved.voyageRerankModel : DEFAULT_SETTINGS.voyageRerankModel,
-    knowledgeMaxCandidates: clampNumber(saved.knowledgeMaxCandidates ?? DEFAULT_SETTINGS.knowledgeMaxCandidates, 10, 200, DEFAULT_SETTINGS.knowledgeMaxCandidates),
-    knowledgeTopK: clampNumber(saved.knowledgeTopK ?? DEFAULT_SETTINGS.knowledgeTopK, 1, 20, DEFAULT_SETTINGS.knowledgeTopK),
+    knowledgeMaxCandidates: clampNumber(saved.knowledgeMaxCandidates ?? DEFAULT_SETTINGS.knowledgeMaxCandidates, 5, MAX_KNOWLEDGE_CANDIDATES, DEFAULT_SETTINGS.knowledgeMaxCandidates),
+    knowledgeTopK: clampNumber(saved.knowledgeTopK ?? DEFAULT_SETTINGS.knowledgeTopK, 1, MAX_KNOWLEDGE_TOP_K, DEFAULT_SETTINGS.knowledgeTopK),
     uiLanguage: isUiLanguage(saved.uiLanguage) ? saved.uiLanguage : DEFAULT_SETTINGS.uiLanguage,
     uiFontFamily: typeof saved.uiFontFamily === "string" && saved.uiFontFamily.trim() ? saved.uiFontFamily : DEFAULT_SETTINGS.uiFontFamily,
     settingsProfilePath: typeof saved.settingsProfilePath === "string" && saved.settingsProfilePath.trim() ? normalizeMarkdownPath(saved.settingsProfilePath) : DEFAULT_SETTINGS.settingsProfilePath,
@@ -3112,7 +3298,8 @@ function isProviderApiMode(value: unknown): value is ProviderApiMode {
 
 function historyMatchesQuery(item: ChatHistoryItem, query: string): boolean {
   if (!query) return true;
-  return [item.title, item.prompt, item.answer]
+  const turns = item.turns?.map((turn) => `${turn.prompt}\n${turn.answer}`).join("\n") ?? "";
+  return [item.title, item.prompt, item.answer, turns]
     .filter((value): value is string => typeof value === "string")
     .some((value) => value.toLowerCase().includes(query));
 }
@@ -3142,6 +3329,47 @@ function modeDescription(settings: Settings, mode: ChatMode): string {
   return uiText(settings, "descNew");
 }
 
+function parseModeCommand(input: string): { mode: ChatMode; prompt: string } | null {
+  const slash = input.match(/^\/(chat|ask|edit|search|knowledge|new)(?:\s+([\s\S]*))?$/i);
+  if (slash) {
+    return {
+      mode: commandModeAlias(slash[1]),
+      prompt: slash[2] ?? ""
+    };
+  }
+
+  const zh = input.match(/^(?:切換到|切换到|進入|进入|使用)(對話|对话|問題|问题|編輯|编辑|搜尋|搜索|查找|新建)(?:模式)?(?:[:：]\s*|\s+)?([\s\S]*)$/);
+  if (!zh) return null;
+  return {
+    mode: commandModeAlias(zh[1]),
+    prompt: zh[2] ?? ""
+  };
+}
+
+function commandModeAlias(value: string): ChatMode {
+  const lower = value.toLowerCase();
+  if (lower === "edit" || /編輯|编辑/.test(value)) return "edit";
+  if (lower === "search" || lower === "knowledge" || /搜尋|搜索|查找/.test(value)) return "knowledge";
+  if (lower === "new" || /新建/.test(value)) return "new";
+  return "chat";
+}
+
+function modeSwitchMessage(settings: Settings, mode: ChatMode): string {
+  const label = modeLabel(settings, mode);
+  return settings.uiLanguage === "en" ? `Switched to ${label} mode.` : `已切換至「${label}」模式。`;
+}
+
+function fileActionMissingMessage(settings: Settings, mode: "edit" | "new"): string {
+  if (settings.uiLanguage === "en") {
+    return mode === "new"
+      ? "AI did not return a create_file action. The referenced content may be too long, or the output token limit is too low. Reduce referenced notes, split the request, or increase Chat Settings > Token limit."
+      : "AI did not return an edit action. The active note may be too long for a full-note rewrite. Reduce the selected range, split the edit, or increase Chat Settings > Token limit.";
+  }
+  return mode === "new"
+    ? "AI 沒有返回可新建的 MD。可能是引用內容過長，或輸出 Token 上限太低。請縮小引用範圍、拆分請求，或提高 Chat Settings > Token limit。"
+    : "AI 沒有返回可套用的編輯。當前文件可能太長，無法一次完整改寫。請改為選取較小範圍、拆分編輯，或提高 Chat Settings > Token limit。";
+}
+
 function shortModelName(model: string): string {
   const clean = model.trim();
   if (!clean) return model;
@@ -3165,6 +3393,73 @@ function knowledgeSummaryText(settings: Settings, folders: string[], hasVoyage: 
   return `${scope} · ${method}`;
 }
 
+function formatMarkdownContextBlock(tag: "active_note" | "context_note", path: string, mode: string, body: string): string {
+  const clipped = truncateText(body, MAX_CONTEXT_FILE_CHARS);
+  const truncated = clipped.length < body.length ? ` truncated="true" originalChars="${body.length}"` : "";
+  return `<${tag} path="${escapeXmlAttr(path)}" mode="${escapeXmlAttr(mode)}"${truncated}>
+${clipped}
+</${tag}>`;
+}
+
+function limitContextParts(parts: string[]): string {
+  const accepted: string[] = [];
+  let total = 0;
+  for (const part of parts) {
+    const nextTotal = total + part.length;
+    if (accepted.length && nextTotal > MAX_CONTEXT_TOTAL_CHARS) {
+      accepted.push(contextTruncatedMarker(parts.join("\n\n").length));
+      break;
+    }
+    accepted.push(part);
+    total = nextTotal;
+  }
+  return accepted.join("\n\n");
+}
+
+function contextTruncatedMarker(originalChars: number): string {
+  return `<context_truncated originalChars="${originalChars}">
+Additional referenced content was omitted to keep this request within a safe token budget. Ask the user to narrow the referenced notes if more detail is required.
+</context_truncated>`;
+}
+
+function limitKnowledgeChunksForVoyage(chunks: KnowledgeChunk[]): KnowledgeChunk[] {
+  const limited: KnowledgeChunk[] = [];
+  let total = 0;
+  for (const chunk of chunks) {
+    const text = truncateText(chunk.text, MAX_VOYAGE_DOCUMENT_CHARS);
+    const nextTotal = total + text.length;
+    if (limited.length && nextTotal > MAX_VOYAGE_TOTAL_CHARS) break;
+    limited.push({ ...chunk, text });
+    total = nextTotal;
+  }
+  return limited;
+}
+
+function limitKnowledgeChunksForChat(chunks: KnowledgeChunk[]): KnowledgeChunk[] {
+  const limited: KnowledgeChunk[] = [];
+  let total = 0;
+  for (const chunk of chunks) {
+    const text = truncateText(chunk.text, MAX_VOYAGE_DOCUMENT_CHARS);
+    const nextTotal = total + text.length;
+    if (limited.length && nextTotal > MAX_CONTEXT_FILE_CHARS) break;
+    limited.push({ ...chunk, text });
+    total = nextTotal;
+  }
+  return limited;
+}
+
+function truncateText(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  if (maxChars < 200) return text.slice(0, maxChars);
+  const head = Math.floor(maxChars * 0.65);
+  const tail = Math.max(0, maxChars - head - 120);
+  return `${text.slice(0, head).trim()}
+
+[...truncated ${text.length - head - tail} chars...]
+
+${text.slice(text.length - tail).trim()}`;
+}
+
 function clampNumber(value: number, min: number, max: number, fallback: number): number {
   if (!Number.isFinite(value)) return fallback;
   return Math.max(min, Math.min(max, Math.floor(value)));
@@ -3178,7 +3473,7 @@ function chunkMarkdown(path: string, raw: string): KnowledgeChunk[] {
   const chunks: KnowledgeChunk[] = [];
   for (const section of sourceSections) {
     const title = extractSectionTitle(section) || path;
-    for (const text of splitLongText(section, 1400, 160)) {
+    for (const text of splitLongText(section, MAX_KNOWLEDGE_CHUNK_CHARS, KNOWLEDGE_CHUNK_OVERLAP)) {
       chunks.push({ path, title, text, score: 0 });
     }
   }
@@ -3525,31 +3820,37 @@ function parseAiJsonResponse(text: string, url: string): unknown {
 }
 
 function extractChatCompletionsContent(json: unknown): string | undefined {
-  const response = json as { choices?: Array<{ message?: { content?: unknown }; text?: unknown }> };
-  const first = response.choices?.[0];
-  return extractTextValue(first?.message?.content) ?? extractTextValue(first?.text);
+  if (!isRecord(json)) return undefined;
+  const choices = Array.isArray(json.choices) ? json.choices : [];
+  const first = choices[0];
+  if (!isRecord(first)) return undefined;
+  const message = isRecord(first.message) ? first.message : undefined;
+  return extractTextValue(message?.content) ?? extractTextValue(first.text);
 }
 
 function extractResponsesContent(json: unknown): string | undefined {
-  const response = json as {
-    output_text?: string;
-    output?: Array<{ content?: Array<{ text?: unknown; type?: string; content?: unknown }> }>;
-    choices?: Array<{ message?: { content?: unknown }; text?: unknown }>;
-    content?: unknown;
-  };
-  if (typeof response.output_text === "string") return response.output_text;
+  if (!isRecord(json)) return undefined;
+  if (typeof json.output_text === "string") return json.output_text;
   const chatContent = extractChatCompletionsContent(json);
   if (chatContent) return chatContent;
-  const direct = extractTextValue(response.content);
+  const direct = extractTextValue(json.content);
   if (direct) return direct;
   const parts: string[] = [];
-  for (const output of response.output ?? []) {
-    for (const content of output.content ?? []) {
+  const outputRows = Array.isArray(json.output) ? json.output : [];
+  for (const output of outputRows) {
+    if (!isRecord(output)) continue;
+    const contentRows = Array.isArray(output.content) ? output.content : [];
+    for (const content of contentRows) {
+      if (!isRecord(content)) continue;
       const text = extractTextValue(content.text) ?? extractTextValue(content.content);
       if (text) parts.push(text);
     }
   }
   return parts.join("\n").trim() || undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object";
 }
 
 function extractTextValue(value: unknown): string | undefined {

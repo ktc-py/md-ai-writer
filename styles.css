@@ -87,12 +87,12 @@
 }
 
 .md-ai-writer-command-header {
-  justify-content: flex-end;
+  justify-content: space-between;
   margin-bottom: 5px;
 }
 
 .md-ai-writer-command-title {
-  display: none;
+  display: flex;
   flex-direction: column;
   gap: 1px;
   min-width: 0;
