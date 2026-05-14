@@ -1,7 +1,7 @@
 {
-  "id": "md-ai-writer",
+  "id": "notecraft-ai",
   "name": "NoteCraft AI",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "minAppVersion": "1.5.0",
   "description": "Focused AI writing assistant for creating and editing Markdown notes with DeepSeek or custom OpenAI-compatible endpoints.",
   "author": "Tim",

@@ -1,12 +1,12 @@
-.md-ai-writer-view,
-.md-ai-writer-picker,
-.md-ai-writer-history,
-.md-ai-writer-chat-settings,
-.md-ai-writer-folder-picker {
-  font-family: var(--md-ai-writer-font), var(--font-interface);
+.notecraft-ai-view,
+.notecraft-ai-picker,
+.notecraft-ai-history,
+.notecraft-ai-chat-settings,
+.notecraft-ai-folder-picker {
+  font-family: var(--notecraft-ai-font), var(--font-interface);
 }
 
-.md-ai-writer-view {
+.notecraft-ai-view {
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -17,7 +17,7 @@
   font-size: 12px;
 }
 
-.md-ai-writer-log {
+.notecraft-ai-log {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
@@ -25,7 +25,7 @@
   background: var(--background-primary);
 }
 
-.md-ai-writer-message {
+.notecraft-ai-message {
   margin: 0 0 7px;
   padding: 7px 9px;
   border: 1px solid transparent;
@@ -34,25 +34,25 @@
   background: transparent;
 }
 
-.md-ai-writer-assistant,
-.md-ai-writer-progress {
+.notecraft-ai-assistant,
+.notecraft-ai-progress {
   border-color: var(--background-modifier-border);
   border-left-color: var(--interactive-accent);
   background: var(--background-secondary);
 }
 
-.md-ai-writer-user {
+.notecraft-ai-user {
   border-left-color: var(--text-muted);
 }
 
-.md-ai-writer-message pre,
-.md-ai-writer-input,
-.md-ai-writer-modal-textarea,
-.md-ai-writer-preview {
-  font-family: var(--md-ai-writer-font), var(--font-monospace);
+.notecraft-ai-message pre,
+.notecraft-ai-input,
+.notecraft-ai-modal-textarea,
+.notecraft-ai-preview {
+  font-family: var(--notecraft-ai-font), var(--font-monospace);
 }
 
-.md-ai-writer-message pre {
+.notecraft-ai-message pre {
   margin: 0;
   white-space: pre-wrap;
   user-select: text;
@@ -60,13 +60,13 @@
   font-size: 12px;
 }
 
-.md-ai-writer-message-status {
+.notecraft-ai-message-status {
   margin-bottom: 4px;
   color: var(--text-error);
   font-weight: 700;
 }
 
-.md-ai-writer-command-panel {
+.notecraft-ai-command-panel {
   flex: 0 0 auto;
   padding: 6px;
   border: 1px solid var(--background-modifier-border);
@@ -74,50 +74,50 @@
   background: var(--background-secondary);
 }
 
-.md-ai-writer-command-header,
-.md-ai-writer-composer-bottom,
-.md-ai-writer-send-actions,
-.md-ai-writer-context-row,
-.md-ai-writer-knowledge-top,
-.md-ai-writer-folder-actions,
-.md-ai-writer-history-actions {
+.notecraft-ai-command-header,
+.notecraft-ai-composer-bottom,
+.notecraft-ai-send-actions,
+.notecraft-ai-context-row,
+.notecraft-ai-knowledge-top,
+.notecraft-ai-folder-actions,
+.notecraft-ai-history-actions {
   display: flex;
   align-items: center;
   gap: 5px;
 }
 
-.md-ai-writer-command-header {
+.notecraft-ai-command-header {
   justify-content: space-between;
   margin-bottom: 5px;
 }
 
-.md-ai-writer-command-title {
+.notecraft-ai-command-title {
   display: flex;
   flex-direction: column;
   gap: 1px;
   min-width: 0;
 }
 
-.md-ai-writer-command-title strong {
+.notecraft-ai-command-title strong {
   color: var(--text-normal);
   font-size: 13px;
   font-weight: 700;
   line-height: 1.2;
 }
 
-.md-ai-writer-command-header > span {
+.notecraft-ai-command-header > span {
   display: none;
 }
 
-.md-ai-writer-subtitle,
-.md-ai-writer-muted,
-.md-ai-writer-section-label,
-.md-ai-writer-settings-note,
-.md-ai-writer-progress {
+.notecraft-ai-subtitle,
+.notecraft-ai-muted,
+.notecraft-ai-section-label,
+.notecraft-ai-settings-note,
+.notecraft-ai-progress {
   color: var(--text-muted);
 }
 
-.md-ai-writer-subtitle {
+.notecraft-ai-subtitle {
   overflow: hidden;
   max-width: 100%;
   text-overflow: ellipsis;
@@ -126,14 +126,14 @@
   line-height: 1.25;
 }
 
-.md-ai-writer-section-label {
+.notecraft-ai-section-label {
   flex: 0 0 auto;
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
 }
 
-.md-ai-writer-mode-selector {
+.notecraft-ai-mode-selector {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 2px;
@@ -144,11 +144,11 @@
   background: var(--background-primary);
 }
 
-.md-ai-writer-mode-selector-inline {
+.notecraft-ai-mode-selector-inline {
   margin: 0 0 6px;
 }
 
-.md-ai-writer-mode-option {
+.notecraft-ai-mode-option {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -166,33 +166,33 @@
   white-space: nowrap;
 }
 
-.md-ai-writer-mode-option svg {
+.notecraft-ai-mode-option svg {
   width: 15px;
   height: 15px;
 }
 
-.md-ai-writer-mode-option:hover {
+.notecraft-ai-mode-option:hover {
   color: var(--text-normal);
   background: var(--background-modifier-hover);
 }
 
-.md-ai-writer-mode-option.is-active {
+.notecraft-ai-mode-option.is-active {
   color: var(--text-on-accent);
   background: var(--interactive-accent);
 }
 
-.md-ai-writer-knowledge-panel {
+.notecraft-ai-knowledge-panel {
   padding: 6px;
   border: 1px solid var(--background-modifier-border);
   border-radius: 7px;
   background: var(--background-primary);
 }
 
-.md-ai-writer-knowledge-panel-inline {
+.notecraft-ai-knowledge-panel-inline {
   margin-bottom: 6px;
 }
 
-.md-ai-writer-knowledge-icon {
+.notecraft-ai-knowledge-icon {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
@@ -202,7 +202,7 @@
   color: var(--text-muted);
 }
 
-.md-ai-writer-knowledge-summary {
+.notecraft-ai-knowledge-summary {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -212,17 +212,17 @@
   font-size: 12px;
 }
 
-.md-ai-writer-knowledge-button,
-.md-ai-writer-slash-button,
-.md-ai-writer-icon-button,
-.md-ai-writer-send-button,
-.md-ai-writer-history-delete {
+.notecraft-ai-knowledge-button,
+.notecraft-ai-slash-button,
+.notecraft-ai-icon-button,
+.notecraft-ai-send-button,
+.notecraft-ai-history-delete {
   border: 1px solid var(--background-modifier-border);
   border-radius: 6px;
   font-weight: 700;
 }
 
-.md-ai-writer-knowledge-button {
+.notecraft-ai-knowledge-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -231,13 +231,13 @@
   padding: 0;
 }
 
-.md-ai-writer-knowledge-button svg {
+.notecraft-ai-knowledge-button svg {
   width: 14px;
   height: 14px;
 }
 
-.md-ai-writer-icon-button,
-.md-ai-writer-slash-button {
+.notecraft-ai-icon-button,
+.notecraft-ai-slash-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -248,33 +248,33 @@
   color: var(--text-muted);
 }
 
-.md-ai-writer-slash-button {
+.notecraft-ai-slash-button {
   font-size: 13px;
 }
 
-.md-ai-writer-icon-button:hover,
-.md-ai-writer-slash-button:hover,
-.md-ai-writer-knowledge-button:hover,
-.md-ai-writer-send-button:hover,
-.md-ai-writer-prompt-chip:hover {
+.notecraft-ai-icon-button:hover,
+.notecraft-ai-slash-button:hover,
+.notecraft-ai-knowledge-button:hover,
+.notecraft-ai-send-button:hover,
+.notecraft-ai-prompt-chip:hover {
   border-color: var(--interactive-accent);
 }
 
-.md-ai-writer-icon-button:disabled {
+.notecraft-ai-icon-button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
 }
 
-.md-ai-writer-context-row-inline {
+.notecraft-ai-context-row-inline {
   flex-wrap: wrap;
   margin: 0 0 6px;
 }
 
-.md-ai-writer-context-row-inline > .md-ai-writer-section-label {
+.notecraft-ai-context-row-inline > .notecraft-ai-section-label {
   display: none;
 }
 
-.md-ai-writer-context-chips {
+.notecraft-ai-context-chips {
   display: flex;
   flex: 1 1 auto;
   flex-wrap: wrap;
@@ -282,7 +282,7 @@
   min-width: 0;
 }
 
-.md-ai-writer-context-chip {
+.notecraft-ai-context-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -295,12 +295,12 @@
   font-size: 12px;
 }
 
-.md-ai-writer-context-chip.is-empty {
+.notecraft-ai-context-chip.is-empty {
   border-style: dashed;
   color: var(--text-muted);
 }
 
-.md-ai-writer-chip-remove {
+.notecraft-ai-chip-remove {
   width: 18px;
   height: 18px;
   padding: 0;
@@ -309,7 +309,7 @@
   color: var(--text-muted);
 }
 
-.md-ai-writer-input {
+.notecraft-ai-input {
   width: 100%;
   min-height: 58px;
   resize: vertical;
@@ -323,17 +323,17 @@
   font-size: 12px;
 }
 
-.md-ai-writer-input:focus {
+.notecraft-ai-input:focus {
   border-color: var(--interactive-accent);
   box-shadow: 0 0 0 1px var(--interactive-accent);
 }
 
-.md-ai-writer-composer-bottom {
+.notecraft-ai-composer-bottom {
   justify-content: space-between;
   margin-top: 6px;
 }
 
-.md-ai-writer-model-button {
+.notecraft-ai-model-button {
   max-width: 58%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -347,7 +347,7 @@
   text-align: left;
 }
 
-.md-ai-writer-send-button {
+.notecraft-ai-send-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -359,12 +359,12 @@
   background: var(--interactive-accent);
 }
 
-.md-ai-writer-send-button svg {
+.notecraft-ai-send-button svg {
   width: 15px;
   height: 15px;
 }
 
-.md-ai-writer-prompt-strip {
+.notecraft-ai-prompt-strip {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -372,7 +372,7 @@
   padding: 1px;
 }
 
-.md-ai-writer-prompt-chip {
+.notecraft-ai-prompt-chip {
   flex: 0 0 auto;
   padding: 4px 8px;
   border: 1px solid var(--background-modifier-border);
@@ -382,12 +382,12 @@
   font-size: 12px;
 }
 
-.md-ai-writer-modal-textarea {
+.notecraft-ai-modal-textarea {
   width: 100%;
   min-height: 160px;
 }
 
-.md-ai-writer-preview {
+.notecraft-ai-preview {
   max-height: 320px;
   overflow: auto;
   white-space: pre-wrap;
@@ -396,41 +396,41 @@
   padding: 8px;
 }
 
-.md-ai-writer-settings-group {
+.notecraft-ai-settings-group {
   border: 1px solid var(--background-modifier-border);
   border-radius: 6px;
   margin: 10px 0;
   padding: 8px 10px;
 }
 
-.md-ai-writer-settings-group summary {
+.notecraft-ai-settings-group summary {
   cursor: pointer;
   font-weight: 700;
 }
 
-.md-ai-writer-picker,
-.md-ai-writer-history,
-.md-ai-writer-chat-settings,
-.md-ai-writer-folder-picker {
+.notecraft-ai-picker,
+.notecraft-ai-history,
+.notecraft-ai-chat-settings,
+.notecraft-ai-folder-picker {
   min-width: 420px;
   font-size: 13px;
 }
 
-.md-ai-writer-picker h2,
-.md-ai-writer-history h2,
-.md-ai-writer-chat-settings h2,
-.md-ai-writer-folder-picker h2 {
+.notecraft-ai-picker h2,
+.notecraft-ai-history h2,
+.notecraft-ai-chat-settings h2,
+.notecraft-ai-folder-picker h2 {
   margin: 0 0 12px;
   font-size: 20px;
   line-height: 1.25;
 }
 
-.md-ai-writer-picker-section h3 {
+.notecraft-ai-picker-section h3 {
   margin: 14px 0 6px;
 }
 
-.md-ai-writer-model-row,
-.md-ai-writer-history-row {
+.notecraft-ai-model-row,
+.notecraft-ai-history-row {
   display: flex;
   width: 100%;
   justify-content: space-between;
@@ -442,12 +442,12 @@
   text-align: left;
 }
 
-.md-ai-writer-model-row.is-active {
+.notecraft-ai-model-row.is-active {
   color: var(--text-accent);
   font-weight: 700;
 }
 
-.md-ai-writer-model-provider {
+.notecraft-ai-model-provider {
   color: var(--text-muted);
   font-size: 12px;
   overflow: hidden;
@@ -455,34 +455,34 @@
   white-space: nowrap;
 }
 
-.md-ai-writer-history input:not([type="checkbox"]) {
+.notecraft-ai-history input:not([type="checkbox"]) {
   width: 100%;
   margin-bottom: 10px;
   font-size: 13px;
 }
 
-.md-ai-writer-history input[type="checkbox"] {
+.notecraft-ai-history input[type="checkbox"] {
   flex: 0 0 auto;
   width: 16px;
   height: 16px;
   margin: 0;
 }
 
-.md-ai-writer-modal-header {
+.notecraft-ai-modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 8px;
 }
 
-.md-ai-writer-settings-tabs {
+.notecraft-ai-settings-tabs {
   display: flex;
   gap: 4px;
   border-bottom: 1px solid var(--background-modifier-border);
   margin-bottom: 16px;
 }
 
-.md-ai-writer-settings-tabs button {
+.notecraft-ai-settings-tabs button {
   border-radius: 6px 6px 0 0;
   border: 1px solid var(--background-modifier-border);
   border-bottom: 0;
@@ -490,48 +490,48 @@
   font-weight: 700;
 }
 
-.md-ai-writer-settings-tabs button.is-active {
+.notecraft-ai-settings-tabs button.is-active {
   color: var(--text-on-accent);
   background: var(--interactive-accent);
 }
 
-.md-ai-writer-agent-tools {
+.notecraft-ai-agent-tools {
   background: var(--background-secondary);
   border-radius: 8px;
   padding: 14px;
 }
 
-.md-ai-writer-prompt-settings-list {
+.notecraft-ai-prompt-settings-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
   margin: 12px 0 20px;
 }
 
-.md-ai-writer-prompt-setting {
+.notecraft-ai-prompt-setting {
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
   padding: 8px;
   background: var(--background-secondary);
 }
 
-.md-ai-writer-prompt-setting textarea {
+.notecraft-ai-prompt-setting textarea {
   min-height: 110px;
 }
 
-.md-ai-writer-folder-actions {
+.notecraft-ai-folder-actions {
   margin: 10px 0;
 }
 
-.md-ai-writer-folder-list,
-.md-ai-writer-history-list {
+.notecraft-ai-folder-list,
+.notecraft-ai-history-list {
   max-height: 420px;
   overflow: auto;
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
 }
 
-.md-ai-writer-folder-row {
+.notecraft-ai-folder-row {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -539,24 +539,24 @@
   border-bottom: 1px solid var(--background-modifier-border);
 }
 
-.md-ai-writer-folder-row:last-child,
-.md-ai-writer-history-manage-row:last-child {
+.notecraft-ai-folder-row:last-child,
+.notecraft-ai-history-manage-row:last-child {
   border-bottom: 0;
 }
 
-.md-ai-writer-folder-row input {
+.notecraft-ai-folder-row input {
   flex: 0 0 auto;
 }
 
-.md-ai-writer-history-list {
+.notecraft-ai-history-list {
   margin-top: 8px;
 }
 
-.md-ai-writer-history-manage-row {
+.notecraft-ai-history-manage-row {
   border-bottom: 1px solid var(--background-modifier-border);
 }
 
-.md-ai-writer-history-main {
+.notecraft-ai-history-main {
   display: flex;
   flex: 1 1 auto;
   min-width: 0;
@@ -568,40 +568,40 @@
   text-align: left;
 }
 
-.md-ai-writer-history-main span:first-child {
+.notecraft-ai-history-main span:first-child {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.md-ai-writer-history-delete {
+.notecraft-ai-history-delete {
   flex: 0 0 auto;
   padding: 4px 8px;
 }
 
 @media (max-width: 560px) {
-  .md-ai-writer-picker,
-  .md-ai-writer-history,
-  .md-ai-writer-chat-settings,
-  .md-ai-writer-folder-picker {
+  .notecraft-ai-picker,
+  .notecraft-ai-history,
+  .notecraft-ai-chat-settings,
+  .notecraft-ai-folder-picker {
     min-width: 0;
   }
 
-  .md-ai-writer-command-header,
-  .md-ai-writer-knowledge-top {
+  .notecraft-ai-command-header,
+  .notecraft-ai-knowledge-top {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .md-ai-writer-send-actions {
+  .notecraft-ai-send-actions {
     align-self: flex-end;
   }
 
-  .md-ai-writer-mode-selector {
+  .notecraft-ai-mode-selector {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .md-ai-writer-model-button {
+  .notecraft-ai-model-button {
     max-width: 58%;
   }
 }

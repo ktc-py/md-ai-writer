@@ -2,7 +2,7 @@
 
 NoteCraft AI is an Obsidian plugin for AI-assisted Markdown writing, vault search, and note editing.
 
-Plugin id: `md-ai-writer`
+Plugin id: `notecraft-ai`
 
 ## Features
 
@@ -43,9 +43,9 @@ https://github.com/ktc-py/md-ai-writer
 2. Copy these files into your vault plugin folder:
 
 ```text
-.obsidian/plugins/md-ai-writer/manifest.json
-.obsidian/plugins/md-ai-writer/main.js
-.obsidian/plugins/md-ai-writer/styles.css
+.obsidian/plugins/notecraft-ai/manifest.json
+.obsidian/plugins/notecraft-ai/main.js
+.obsidian/plugins/notecraft-ai/styles.css
 ```
 
 3. Enable `NoteCraft AI` in Obsidian community plugins.
@@ -69,14 +69,25 @@ The built plugin files used by Obsidian are:
 The plugin stores local settings in Obsidian's plugin data file, normally:
 
 ```text
-.obsidian/plugins/md-ai-writer/data.json
+.obsidian/plugins/notecraft-ai/data.json
 ```
 
 This file can contain API keys and is intentionally ignored by Git.
 
 Settings can also be exported to a private Markdown profile from inside the plugin. The default vault folder for user-facing NoteCraft AI files is `notecraft-ai/`.
 
-The technical plugin id and Obsidian installation folder remain `md-ai-writer` for compatibility. User-facing vault files use the `notecraft-ai` name.
+## Migration From `md-ai-writer`
+
+Version `0.2.0` changes the Obsidian plugin id and install folder to `notecraft-ai`. To keep existing settings, copy the old plugin data file before removing the old plugin folder:
+
+```text
+.obsidian/plugins/md-ai-writer/data.json
+.obsidian/plugins/notecraft-ai/data.json
+```
+
+Obsidian will treat this as a new plugin identity, so enabled state and hotkeys may need to be re-enabled once.
+
+The target repository name is `ktc-py/notecraft-ai`. Until the GitHub repository is renamed in GitHub settings, BRAT should keep using the existing repository URL above.
 
 ## Privacy
 

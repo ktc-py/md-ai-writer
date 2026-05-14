@@ -18,7 +18,7 @@ import {
 
 declare const require: (module: string) => { execFile?: ExecFileFn };
 
-const VIEW_TYPE = "md-ai-writer-view";
+const VIEW_TYPE = "notecraft-ai-view";
 const APP_NAME = "NoteCraft AI";
 const SETTINGS_PROFILE_CODE_BLOCK = "notecraft-ai-settings";
 const PRODUCT_FOLDER_PATH = "notecraft-ai";
@@ -373,7 +373,7 @@ Return only JSON with this shape:
 }
 Use at most 3 tool calls. Prefer read for a known note path, search for vault lookup, tasks for task queries, tags for tag overview, unresolved for unresolved links, daily for daily note, and files for recent/list operations.`;
 
-export default class MdAiWriterPlugin extends Plugin {
+export default class NoteCraftAiPlugin extends Plugin {
   settings: Settings;
   lastMarkdownLeaf: WorkspaceLeaf | null = null;
 
@@ -388,14 +388,14 @@ export default class MdAiWriterPlugin extends Plugin {
       })
     );
 
-    this.registerView(VIEW_TYPE, (leaf) => new AiWriterView(leaf, this));
+    this.registerView(VIEW_TYPE, (leaf) => new NoteCraftAiView(leaf, this));
 
     this.addRibbonIcon("sparkles", `Open ${APP_NAME}`, () => {
       void this.activateView();
     });
 
     this.addCommand({
-      id: "open-md-ai-writer",
+      id: "open-notecraft-ai",
       name: "打開 AI 對話",
       callback: () => void this.activateView()
     });
@@ -465,11 +465,11 @@ export default class MdAiWriterPlugin extends Plugin {
       }
     });
 
-    this.addSettingTab(new MdAiWriterSettingTab(this.app, this));
+    this.addSettingTab(new NoteCraftAiSettingTab(this.app, this));
   }
 
   onunload() {
-    document.body.style.removeProperty("--md-ai-writer-font");
+    document.body.style.removeProperty("--notecraft-ai-font");
     this.app.workspace.detachLeavesOfType(VIEW_TYPE);
   }
 
@@ -484,9 +484,9 @@ export default class MdAiWriterPlugin extends Plugin {
     if (leaf) this.app.workspace.revealLeaf(leaf);
   }
 
-  getOpenView(): AiWriterView | null {
+  getOpenView(): NoteCraftAiView | null {
     const view = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0]?.view;
-    return view instanceof AiWriterView ? view : null;
+    return view instanceof NoteCraftAiView ? view : null;
   }
 
   async setActiveViewMode(mode: ChatMode) {
@@ -556,12 +556,12 @@ export default class MdAiWriterPlugin extends Plugin {
   }
 
   applyGlobalUiPreferences() {
-    document.body.style.setProperty("--md-ai-writer-font", this.settings.uiFontFamily.trim() || DEFAULT_UI_FONT);
+    document.body.style.setProperty("--notecraft-ai-font", this.settings.uiFontFamily.trim() || DEFAULT_UI_FONT);
   }
 
   refreshOpenViews() {
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
-      if (leaf.view instanceof AiWriterView) leaf.view.refreshUiChrome();
+      if (leaf.view instanceof NoteCraftAiView) leaf.view.refreshUiChrome();
     }
   }
 
@@ -1162,8 +1162,8 @@ ${assistantAnswer}`;
   }
 }
 
-class AiWriterView extends ItemView {
-  plugin: MdAiWriterPlugin;
+class NoteCraftAiView extends ItemView {
+  plugin: NoteCraftAiPlugin;
   logEl: HTMLElement;
   inputEl: HTMLTextAreaElement;
   contextChip: HTMLElement;
@@ -1182,7 +1182,7 @@ class AiWriterView extends ItemView {
   sessionTurns: SessionTurn[] = [];
   mode: ChatMode;
 
-  constructor(leaf: WorkspaceLeaf, plugin: MdAiWriterPlugin) {
+  constructor(leaf: WorkspaceLeaf, plugin: NoteCraftAiPlugin) {
     super(leaf);
     this.plugin = plugin;
     this.mode = plugin.settings.preferredChatMode;
@@ -1200,43 +1200,43 @@ class AiWriterView extends ItemView {
   async onOpen() {
     const root = this.containerEl.children[1] as HTMLElement;
     root.empty();
-    root.addClass("md-ai-writer-view");
+    root.addClass("notecraft-ai-view");
     this.applyFontPreference(root);
 
-    this.suggestedEl = root.createDiv({ cls: "md-ai-writer-prompt-strip" });
+    this.suggestedEl = root.createDiv({ cls: "notecraft-ai-prompt-strip" });
     this.suggestedEl.hide();
 
-    this.logEl = root.createDiv({ cls: "md-ai-writer-log" });
+    this.logEl = root.createDiv({ cls: "notecraft-ai-log" });
 
-    const composer = root.createDiv({ cls: "md-ai-writer-command-panel" });
-    const composerHeader = composer.createDiv({ cls: "md-ai-writer-command-header" });
-    const composerTitle = composerHeader.createDiv({ cls: "md-ai-writer-command-title" });
+    const composer = root.createDiv({ cls: "notecraft-ai-command-panel" });
+    const composerHeader = composer.createDiv({ cls: "notecraft-ai-command-header" });
+    const composerTitle = composerHeader.createDiv({ cls: "notecraft-ai-command-title" });
     composerTitle.createEl("strong", { text: APP_NAME });
-    this.subtitleEl = composerTitle.createDiv({ cls: "md-ai-writer-subtitle" });
+    this.subtitleEl = composerTitle.createDiv({ cls: "notecraft-ai-subtitle" });
     this.commandLabelEl = composerHeader.createSpan({ text: uiText(this.plugin.settings, "command") });
-    const composerTools = composerHeader.createDiv({ cls: "md-ai-writer-send-actions" });
-    composerTools.createEl("button", { cls: "md-ai-writer-slash-button", text: "/", attr: { title: uiText(this.plugin.settings, "quickPrompts") } }).onclick = () => this.showPromptMenu();
+    const composerTools = composerHeader.createDiv({ cls: "notecraft-ai-send-actions" });
+    composerTools.createEl("button", { cls: "notecraft-ai-slash-button", text: "/", attr: { title: uiText(this.plugin.settings, "quickPrompts") } }).onclick = () => this.showPromptMenu();
     this.iconButton(composerTools, "plus", uiText(this.plugin.settings, "newChat"), () => this.clearChat());
     this.iconButton(composerTools, "history", uiText(this.plugin.settings, "history"), () => new ChatHistoryModal(this.app, this.plugin, (item) => this.loadHistoryItem(item)).open());
     this.iconButton(composerTools, "sliders-horizontal", uiText(this.plugin.settings, "settings"), () => new ChatSettingsModal(this.app, this.plugin, () => this.refreshModelButton()).open());
 
-    this.modeSelector = composer.createDiv({ cls: "md-ai-writer-mode-selector md-ai-writer-mode-selector-inline" });
+    this.modeSelector = composer.createDiv({ cls: "notecraft-ai-mode-selector notecraft-ai-mode-selector-inline" });
     this.renderModeSelector();
 
-    this.knowledgePanel = composer.createDiv({ cls: "md-ai-writer-knowledge-panel md-ai-writer-knowledge-panel-inline" });
+    this.knowledgePanel = composer.createDiv({ cls: "notecraft-ai-knowledge-panel notecraft-ai-knowledge-panel-inline" });
     this.renderKnowledgePanel();
 
-    const composerContextRow = composer.createDiv({ cls: "md-ai-writer-context-row md-ai-writer-context-row-inline" });
-    this.contextLabelEl = composerContextRow.createSpan({ cls: "md-ai-writer-section-label", text: uiText(this.plugin.settings, "context") });
+    const composerContextRow = composer.createDiv({ cls: "notecraft-ai-context-row notecraft-ai-context-row-inline" });
+    this.contextLabelEl = composerContextRow.createSpan({ cls: "notecraft-ai-section-label", text: uiText(this.plugin.settings, "context") });
     this.iconButton(composerContextRow, "at-sign", uiText(this.plugin.settings, "addContext"), () => {
       new ContextPickerModal(this.app, this.plugin, (selection) => this.useContextSelection(selection)).open();
       this.refreshContextLabel();
     });
-    this.contextChip = composerContextRow.createDiv({ cls: "md-ai-writer-context-chips" });
+    this.contextChip = composerContextRow.createDiv({ cls: "notecraft-ai-context-chips" });
     this.refreshContextLabel();
 
     this.inputEl = composer.createEl("textarea", {
-      cls: "md-ai-writer-input",
+      cls: "notecraft-ai-input",
       attr: { placeholder: this.placeholderForMode() }
     });
     this.inputEl.addEventListener("keydown", (event) => {
@@ -1251,11 +1251,11 @@ class AiWriterView extends ItemView {
       }
     });
 
-    const bottom = composer.createDiv({ cls: "md-ai-writer-composer-bottom" });
-    this.modelButton = bottom.createEl("button", { cls: "md-ai-writer-model-button" });
+    const bottom = composer.createDiv({ cls: "notecraft-ai-composer-bottom" });
+    this.modelButton = bottom.createEl("button", { cls: "notecraft-ai-model-button" });
     this.modelButton.onclick = () => new ModelPickerModal(this.app, this.plugin, () => this.refreshModelButton()).open();
     this.refreshModelButton();
-    this.sendButton = bottom.createEl("button", { cls: "md-ai-writer-send-button", attr: { title: uiText(this.plugin.settings, "send"), "aria-label": uiText(this.plugin.settings, "send") } });
+    this.sendButton = bottom.createEl("button", { cls: "notecraft-ai-send-button", attr: { title: uiText(this.plugin.settings, "send"), "aria-label": uiText(this.plugin.settings, "send") } });
     setIcon(this.sendButton, "send-horizontal");
     this.sendButton.onclick = () => void this.ask();
     this.registerInterval(window.setInterval(() => this.refreshContextLabel(), 1000));
@@ -1264,7 +1264,7 @@ class AiWriterView extends ItemView {
   }
 
   applyFontPreference(root = this.containerEl.children[1] as HTMLElement) {
-    root.style.setProperty("--md-ai-writer-font", this.plugin.settings.uiFontFamily.trim() || DEFAULT_UI_FONT);
+    root.style.setProperty("--notecraft-ai-font", this.plugin.settings.uiFontFamily.trim() || DEFAULT_UI_FONT);
   }
 
   refreshUiChrome() {
@@ -1285,7 +1285,7 @@ class AiWriterView extends ItemView {
   }
 
   iconButton(parent: HTMLElement, icon: string, label: string, onClick: () => void): HTMLButtonElement {
-    const button = parent.createEl("button", { cls: "md-ai-writer-icon-button", attr: { "aria-label": label, title: label } });
+    const button = parent.createEl("button", { cls: "notecraft-ai-icon-button", attr: { "aria-label": label, title: label } });
     setIcon(button, icon);
     button.onclick = onClick;
     return button;
@@ -1293,8 +1293,8 @@ class AiWriterView extends ItemView {
 
   addLog(role: string, content: string) {
     this.suggestedEl.hide();
-    const item = this.logEl.createDiv({ cls: `md-ai-writer-message md-ai-writer-${role}` });
-    if (role === "error") item.createDiv({ cls: "md-ai-writer-message-status", text: uiText(this.plugin.settings, "error") });
+    const item = this.logEl.createDiv({ cls: `notecraft-ai-message notecraft-ai-${role}` });
+    if (role === "error") item.createDiv({ cls: "notecraft-ai-message-status", text: uiText(this.plugin.settings, "error") });
     item.createEl("pre", { text: content });
     this.logEl.scrollTop = this.logEl.scrollHeight;
   }
@@ -1309,7 +1309,7 @@ class AiWriterView extends ItemView {
     this.modeSelector.empty();
     for (const modeId of MODE_IDS) {
       const button = this.modeSelector.createEl("button", {
-        cls: "md-ai-writer-mode-option",
+        cls: "notecraft-ai-mode-option",
         attr: { title: modeDescription(this.plugin.settings, modeId), "aria-label": modeLabel(this.plugin.settings, modeId) }
       });
       setIcon(button, modeIcon(modeId));
@@ -1354,12 +1354,12 @@ class AiWriterView extends ItemView {
 
   renderKnowledgePanel() {
     this.knowledgePanel.empty();
-    const top = this.knowledgePanel.createDiv({ cls: "md-ai-writer-knowledge-top" });
-    const searchIcon = top.createSpan({ cls: "md-ai-writer-knowledge-icon", attr: { title: knowledgeModeTitle(this.plugin.settings) } });
+    const top = this.knowledgePanel.createDiv({ cls: "notecraft-ai-knowledge-top" });
+    const searchIcon = top.createSpan({ cls: "notecraft-ai-knowledge-icon", attr: { title: knowledgeModeTitle(this.plugin.settings) } });
     setIcon(searchIcon, "search");
-    this.knowledgeSummaryEl = top.createDiv({ cls: "md-ai-writer-knowledge-summary" });
+    this.knowledgeSummaryEl = top.createDiv({ cls: "notecraft-ai-knowledge-summary" });
     const choose = top.createEl("button", {
-      cls: "md-ai-writer-knowledge-button",
+      cls: "notecraft-ai-knowledge-button",
       attr: { title: uiText(this.plugin.settings, "chooseFolders"), "aria-label": uiText(this.plugin.settings, "chooseFolders") }
     });
     setIcon(choose, "folder-search");
@@ -1387,7 +1387,7 @@ class AiWriterView extends ItemView {
   }
 
   refreshContextLabel() {
-    if (this.contextChip?.hasClass("md-ai-writer-context-chips")) {
+    if (this.contextChip?.hasClass("notecraft-ai-context-chips")) {
       this.renderContextChips();
       return;
     }
@@ -1406,7 +1406,7 @@ class AiWriterView extends ItemView {
     this.contextChip.removeClass("is-empty");
     setIcon(this.contextChip.createSpan(), "file-text");
     this.contextChip.createSpan({ text: ` ${view.file.basename} ` });
-    const remove = this.contextChip.createEl("button", { cls: "md-ai-writer-chip-remove", text: "x", attr: { title: uiText(this.plugin.settings, "removeCurrentContext") } });
+    const remove = this.contextChip.createEl("button", { cls: "notecraft-ai-chip-remove", text: "x", attr: { title: uiText(this.plugin.settings, "removeCurrentContext") } });
     remove.onclick = (event) => {
       event.stopPropagation();
       this.useActiveNoteContext = false;
@@ -1422,10 +1422,10 @@ class AiWriterView extends ItemView {
 
     if (this.useActiveNoteContext && view?.file) {
       count++;
-      const chip = this.contextChip.createDiv({ cls: "md-ai-writer-context-chip" });
+      const chip = this.contextChip.createDiv({ cls: "notecraft-ai-context-chip" });
       setIcon(chip.createSpan(), "file-text");
       chip.createSpan({ text: ` ${view.file.basename} ` });
-      const remove = chip.createEl("button", { cls: "md-ai-writer-chip-remove", text: "x", attr: { title: uiText(this.plugin.settings, "removeCurrentContext") } });
+      const remove = chip.createEl("button", { cls: "notecraft-ai-chip-remove", text: "x", attr: { title: uiText(this.plugin.settings, "removeCurrentContext") } });
       remove.onclick = (event) => {
         event.stopPropagation();
         this.useActiveNoteContext = false;
@@ -1436,10 +1436,10 @@ class AiWriterView extends ItemView {
     for (const path of this.fileContextPaths) {
       if (this.useActiveNoteContext && activePath === path) continue;
       count++;
-      const chip = this.contextChip.createDiv({ cls: "md-ai-writer-context-chip" });
+      const chip = this.contextChip.createDiv({ cls: "notecraft-ai-context-chip" });
       setIcon(chip.createSpan(), "file-text");
       chip.createSpan({ text: ` ${path} ` });
-      const remove = chip.createEl("button", { cls: "md-ai-writer-chip-remove", text: "x", attr: { title: uiText(this.plugin.settings, "removeCurrentContext") } });
+      const remove = chip.createEl("button", { cls: "notecraft-ai-chip-remove", text: "x", attr: { title: uiText(this.plugin.settings, "removeCurrentContext") } });
       remove.onclick = (event) => {
         event.stopPropagation();
         this.fileContextPaths = this.fileContextPaths.filter((entry) => entry !== path);
@@ -1449,10 +1449,10 @@ class AiWriterView extends ItemView {
 
     for (const item of this.historyContextItems) {
       count++;
-      const chip = this.contextChip.createDiv({ cls: "md-ai-writer-context-chip" });
+      const chip = this.contextChip.createDiv({ cls: "notecraft-ai-context-chip" });
       setIcon(chip.createSpan(), "messages-square");
       chip.createSpan({ text: ` ${item.title || uiText(this.plugin.settings, "chatHistory")} ` });
-      const remove = chip.createEl("button", { cls: "md-ai-writer-chip-remove", text: "x", attr: { title: uiText(this.plugin.settings, "removeHistoryContext") } });
+      const remove = chip.createEl("button", { cls: "notecraft-ai-chip-remove", text: "x", attr: { title: uiText(this.plugin.settings, "removeHistoryContext") } });
       remove.onclick = (event) => {
         event.stopPropagation();
         this.historyContextItems = this.historyContextItems.filter((entry) => entry.createdAt !== item.createdAt);
@@ -1461,17 +1461,17 @@ class AiWriterView extends ItemView {
     }
 
     if (!count) {
-      const chip = this.contextChip.createDiv({ cls: "md-ai-writer-context-chip is-empty" });
+      const chip = this.contextChip.createDiv({ cls: "notecraft-ai-context-chip is-empty" });
       chip.setText(uiText(this.plugin.settings, "noContext"));
     }
   }
 
   renderSuggestedPrompts() {
     this.suggestedEl.empty();
-    this.suggestedEl.createSpan({ cls: "md-ai-writer-section-label", text: uiText(this.plugin.settings, "quickPrompts") });
+    this.suggestedEl.createSpan({ cls: "notecraft-ai-section-label", text: uiText(this.plugin.settings, "quickPrompts") });
     for (const prompt of this.plugin.getQuickPrompts()) {
       const chip = this.suggestedEl.createEl("button", {
-        cls: "md-ai-writer-prompt-chip",
+        cls: "notecraft-ai-prompt-chip",
         text: prompt.name,
         attr: { title: prompt.prompt }
       });
@@ -1586,7 +1586,7 @@ class AiWriterView extends ItemView {
 
   addProgress(message: string): HTMLPreElement {
     this.suggestedEl.hide();
-    const item = this.logEl.createDiv({ cls: "md-ai-writer-message md-ai-writer-assistant md-ai-writer-progress" });
+    const item = this.logEl.createDiv({ cls: "notecraft-ai-message notecraft-ai-assistant notecraft-ai-progress" });
     const pre = item.createEl("pre", { text: message });
     this.logEl.scrollTop = this.logEl.scrollHeight;
     return pre;
@@ -1744,10 +1744,10 @@ class AiWriterView extends ItemView {
 }
 
 class ModelPickerModal extends Modal {
-  plugin: MdAiWriterPlugin;
+  plugin: NoteCraftAiPlugin;
   onChange: () => void;
 
-  constructor(app: App, plugin: MdAiWriterPlugin, onChange: () => void) {
+  constructor(app: App, plugin: NoteCraftAiPlugin, onChange: () => void) {
     super(app);
     this.plugin = plugin;
     this.onChange = onChange;
@@ -1764,8 +1764,8 @@ class ModelPickerModal extends Modal {
   renderChineseSettings() {
     const isEn = this.plugin.settings.uiLanguage === "en";
     this.contentEl.empty();
-    this.contentEl.addClass("md-ai-writer-chat-settings");
-    const header = this.contentEl.createDiv({ cls: "md-ai-writer-modal-header" });
+    this.contentEl.addClass("notecraft-ai-chat-settings");
+    const header = this.contentEl.createDiv({ cls: "notecraft-ai-modal-header" });
     header.createEl("h2", { text: isEn ? "Chat Settings" : "對話設定" });
     const reset = header.createEl("button", { text: isEn ? "Reset" : "重設" });
     reset.onclick = async () => {
@@ -1820,7 +1820,7 @@ class ModelPickerModal extends Modal {
       );
 
     this.contentEl.createEl("p", {
-      cls: "md-ai-writer-settings-note",
+      cls: "notecraft-ai-settings-note",
       text: isEn
         ? "These settings affect chat requests in this plugin. Models, API keys, and base URLs are configured in the Model settings tab."
         : "這些設定會影響目前插件的對話請求；模型、API Key 和 Base URL 請到 Model 設定頁調整。"
@@ -1830,7 +1830,7 @@ class ModelPickerModal extends Modal {
   onOpen() {
     const isEn = this.plugin.settings.uiLanguage === "en";
     this.contentEl.empty();
-    this.contentEl.addClass("md-ai-writer-picker");
+    this.contentEl.addClass("notecraft-ai-picker");
     this.contentEl.createEl("h2", { text: uiText(this.plugin.settings, "selectModel") });
     const deepseek = this.plugin.settings.providers.deepseek;
     this.renderProviderModels("deepseek", undefined, "DeepSeek", deepseek, isEn);
@@ -1840,12 +1840,12 @@ class ModelPickerModal extends Modal {
   }
 
   renderProviderModels(provider: ProviderId, customId: string | undefined, title: string, config: ProviderConfig, isEn: boolean) {
-    const section = this.contentEl.createDiv({ cls: "md-ai-writer-picker-section" });
+    const section = this.contentEl.createDiv({ cls: "notecraft-ai-picker-section" });
     section.createEl("h3", { text: title });
     for (const model of this.plugin.getModelOptions(provider, customId)) {
-      const row = section.createEl("button", { cls: "md-ai-writer-model-row" });
+      const row = section.createEl("button", { cls: "notecraft-ai-model-row" });
       row.createSpan({ text: model });
-      row.createSpan({ cls: "md-ai-writer-model-provider", text: config.apiKey ? (isEn ? "Ready" : "可用") : (isEn ? "Needs API key" : "需要 API Key") });
+      row.createSpan({ cls: "notecraft-ai-model-provider", text: config.apiKey ? (isEn ? "Ready" : "可用") : (isEn ? "Needs API key" : "需要 API Key") });
       if (this.plugin.settings.provider === provider && (provider === "deepseek" || this.plugin.settings.activeCustomProviderId === customId) && config.model === model) row.addClass("is-active");
       row.onclick = async () => {
         this.plugin.settings.provider = provider;
@@ -1860,10 +1860,10 @@ class ModelPickerModal extends Modal {
 }
 
 class ChatSettingsModal extends Modal {
-  plugin: MdAiWriterPlugin;
+  plugin: NoteCraftAiPlugin;
   onChange: () => void;
 
-  constructor(app: App, plugin: MdAiWriterPlugin, onChange: () => void) {
+  constructor(app: App, plugin: NoteCraftAiPlugin, onChange: () => void) {
     super(app);
     this.plugin = plugin;
     this.onChange = onChange;
@@ -1871,8 +1871,8 @@ class ChatSettingsModal extends Modal {
 
   renderChineseSettings() {
     this.contentEl.empty();
-    this.contentEl.addClass("md-ai-writer-chat-settings");
-    const header = this.contentEl.createDiv({ cls: "md-ai-writer-modal-header" });
+    this.contentEl.addClass("notecraft-ai-chat-settings");
+    const header = this.contentEl.createDiv({ cls: "notecraft-ai-modal-header" });
     header.createEl("h2", { text: "對話設定" });
     const reset = header.createEl("button", { text: "重設" });
     reset.onclick = async () => {
@@ -1927,7 +1927,7 @@ class ChatSettingsModal extends Modal {
       );
 
     this.contentEl.createEl("p", {
-      cls: "md-ai-writer-settings-note",
+      cls: "notecraft-ai-settings-note",
       text: "這些設定會影響目前插件的對話請求；模型、API Key 和 Base URL 請到 Model 設定頁調整。"
     });
   }
@@ -1936,8 +1936,8 @@ class ChatSettingsModal extends Modal {
     this.renderChineseSettings();
     return;
     this.contentEl.empty();
-    this.contentEl.addClass("md-ai-writer-chat-settings");
-    const header = this.contentEl.createDiv({ cls: "md-ai-writer-modal-header" });
+    this.contentEl.addClass("notecraft-ai-chat-settings");
+    const header = this.contentEl.createDiv({ cls: "notecraft-ai-modal-header" });
     header.createEl("h2", { text: "Chat Settings" });
     const reset = header.createEl("button", { text: "↻ Reset" });
     reset.onclick = async () => {
@@ -1991,7 +1991,7 @@ class ChatSettingsModal extends Modal {
       );
 
     this.contentEl.createEl("p", {
-      cls: "md-ai-writer-settings-note",
+      cls: "notecraft-ai-settings-note",
       text: "System Prompt applies to this chat session; model settings are bound to the current model."
     });
   }
@@ -2036,11 +2036,11 @@ class ChatSettingsModal extends Modal {
 }
 
 class ChatHistoryModal extends Modal {
-  plugin: MdAiWriterPlugin;
+  plugin: NoteCraftAiPlugin;
   onSelect: (item: ChatHistoryItem) => void;
   selected = new Set<number>();
 
-  constructor(app: App, plugin: MdAiWriterPlugin, onSelect: (item: ChatHistoryItem) => void) {
+  constructor(app: App, plugin: NoteCraftAiPlugin, onSelect: (item: ChatHistoryItem) => void) {
     super(app);
     this.plugin = plugin;
     this.onSelect = onSelect;
@@ -2049,38 +2049,38 @@ class ChatHistoryModal extends Modal {
   renderManagedHistory() {
     const isEn = this.plugin.settings.uiLanguage === "en";
     this.contentEl.empty();
-    this.contentEl.addClass("md-ai-writer-history");
+    this.contentEl.addClass("notecraft-ai-history");
     this.contentEl.createEl("h2", { text: isEn ? "Chat history" : "歷史交流紀錄" });
     const search = this.contentEl.createEl("input", { attr: { placeholder: isEn ? "Search title or content..." : "搜尋標題或內容..." } });
-    const actions = this.contentEl.createDiv({ cls: "md-ai-writer-history-actions" });
+    const actions = this.contentEl.createDiv({ cls: "notecraft-ai-history-actions" });
     const deleteSelected = actions.createEl("button", { text: isEn ? "Delete selected" : "刪除已選" });
     const clearAll = actions.createEl("button", { text: isEn ? "Clear all" : "清空全部" });
-    const list = this.contentEl.createDiv({ cls: "md-ai-writer-history-list" });
+    const list = this.contentEl.createDiv({ cls: "notecraft-ai-history-list" });
 
     const render = () => {
       list.empty();
       const query = search.value.toLowerCase();
       const items = this.plugin.settings.chatHistory.filter((entry) => historyMatchesQuery(entry, query));
       if (!items.length) {
-        list.createDiv({ cls: "md-ai-writer-muted", text: isEn ? "No matching records." : "沒有符合的紀錄。" });
+        list.createDiv({ cls: "notecraft-ai-muted", text: isEn ? "No matching records." : "沒有符合的紀錄。" });
         return;
       }
       for (const item of items) {
-        const row = list.createDiv({ cls: "md-ai-writer-history-row md-ai-writer-history-manage-row" });
+        const row = list.createDiv({ cls: "notecraft-ai-history-row notecraft-ai-history-manage-row" });
         const checkbox = row.createEl("input", { attr: { type: "checkbox" } });
         checkbox.checked = this.selected.has(item.createdAt);
         checkbox.onchange = () => {
           if (checkbox.checked) this.selected.add(item.createdAt);
           else this.selected.delete(item.createdAt);
         };
-        const main = row.createEl("button", { cls: "md-ai-writer-history-main" });
+        const main = row.createEl("button", { cls: "notecraft-ai-history-main" });
         main.createSpan({ text: item.title || item.prompt?.slice(0, 60) || (isEn ? "Untitled chat" : "未命名對話") });
-        main.createSpan({ cls: "md-ai-writer-model-provider", text: formatMemoryTime(new Date(item.createdAt)) });
+        main.createSpan({ cls: "notecraft-ai-model-provider", text: formatMemoryTime(new Date(item.createdAt)) });
         main.onclick = () => {
           this.onSelect(item);
           this.close();
         };
-        row.createEl("button", { cls: "md-ai-writer-history-delete", text: isEn ? "Delete" : "刪除" }).onclick = async () => {
+        row.createEl("button", { cls: "notecraft-ai-history-delete", text: isEn ? "Delete" : "刪除" }).onclick = async () => {
           this.plugin.settings.chatHistory = this.plugin.settings.chatHistory.filter((entry) => entry.createdAt !== item.createdAt);
           this.selected.delete(item.createdAt);
           await this.plugin.saveSettings();
@@ -2111,14 +2111,14 @@ class ChatHistoryModal extends Modal {
     this.renderManagedHistory();
     return;
     this.contentEl.empty();
-    this.contentEl.addClass("md-ai-writer-history");
+    this.contentEl.addClass("notecraft-ai-history");
     const search = this.contentEl.createEl("input", { attr: { placeholder: "Search..." } });
     const list = this.contentEl.createDiv();
     const render = () => {
       list.empty();
       const query = search.value.toLowerCase();
       for (const item of this.plugin.settings.chatHistory.filter((entry) => historyMatchesQuery(entry, query))) {
-        const row = list.createEl("button", { cls: "md-ai-writer-history-row" });
+        const row = list.createEl("button", { cls: "notecraft-ai-history-row" });
         row.createSpan({ text: "◌" });
         row.createSpan({ text: item.title });
         row.onclick = () => {
@@ -2134,11 +2134,11 @@ class ChatHistoryModal extends Modal {
 }
 
 class ContextPickerModal extends Modal {
-  plugin: MdAiWriterPlugin;
+  plugin: NoteCraftAiPlugin;
   onSelect: (selection: ContextSelection) => void;
   selectedFiles = new Set<string>();
 
-  constructor(app: App, plugin: MdAiWriterPlugin, onSelect: (selection: ContextSelection) => void) {
+  constructor(app: App, plugin: NoteCraftAiPlugin, onSelect: (selection: ContextSelection) => void) {
     super(app);
     this.plugin = plugin;
     this.onSelect = onSelect;
@@ -2146,10 +2146,10 @@ class ContextPickerModal extends Modal {
 
   onOpen() {
     this.contentEl.empty();
-    this.contentEl.addClass("md-ai-writer-history");
+    this.contentEl.addClass("notecraft-ai-history");
     const isEn = this.plugin.settings.uiLanguage === "en";
     const search = this.contentEl.createEl("input", { attr: { placeholder: isEn ? "Search Markdown files or chat history..." : "搜尋 Markdown 文件或歷史交流..." } });
-    const actions = this.contentEl.createDiv({ cls: "md-ai-writer-history-actions" });
+    const actions = this.contentEl.createDiv({ cls: "notecraft-ai-history-actions" });
     const addSelected = actions.createEl("button", { text: isEn ? "Add selected files" : "加入已選文件" });
     const clearSelected = actions.createEl("button", { text: isEn ? "Clear selection" : "清除選取" });
     const list = this.contentEl.createDiv();
@@ -2157,10 +2157,10 @@ class ContextPickerModal extends Modal {
       list.empty();
       const query = search.value.toLowerCase();
       for (const file of this.app.vault.getMarkdownFiles().filter((entry) => entry.path.toLowerCase().includes(query)).slice(0, 80)) {
-        const row = list.createDiv({ cls: "md-ai-writer-history-row md-ai-writer-history-manage-row" });
+        const row = list.createDiv({ cls: "notecraft-ai-history-row notecraft-ai-history-manage-row" });
         const checkbox = row.createEl("input", { attr: { type: "checkbox" } });
         checkbox.checked = this.selectedFiles.has(file.path);
-        const main = row.createEl("button", { cls: "md-ai-writer-history-main" });
+        const main = row.createEl("button", { cls: "notecraft-ai-history-main" });
         setIcon(main.createSpan(), "file-text");
         main.createSpan({ text: file.path });
         row.onclick = () => {
@@ -2170,7 +2170,7 @@ class ContextPickerModal extends Modal {
         };
       }
       for (const item of this.plugin.settings.chatHistory.filter((entry) => historyMatchesQuery(entry, query)).slice(0, 40)) {
-        const row = list.createEl("button", { cls: "md-ai-writer-history-row" });
+        const row = list.createEl("button", { cls: "notecraft-ai-history-row" });
         setIcon(row.createSpan(), "messages-square");
         row.createSpan({ text: `${isEn ? "Chat history" : "交流紀錄"}：${item.title}` });
         row.onclick = () => {
@@ -2195,11 +2195,11 @@ class ContextPickerModal extends Modal {
 }
 
 class KnowledgeFolderModal extends Modal {
-  plugin: MdAiWriterPlugin;
+  plugin: NoteCraftAiPlugin;
   onSave: (folders: string[]) => Promise<void>;
   selected: Set<string>;
 
-  constructor(app: App, plugin: MdAiWriterPlugin, onSave: (folders: string[]) => Promise<void>) {
+  constructor(app: App, plugin: NoteCraftAiPlugin, onSave: (folders: string[]) => Promise<void>) {
     super(app);
     this.plugin = plugin;
     this.onSave = onSave;
@@ -2209,16 +2209,16 @@ class KnowledgeFolderModal extends Modal {
   onOpen() {
     const isEn = this.plugin.settings.uiLanguage === "en";
     this.contentEl.empty();
-    this.contentEl.addClass("md-ai-writer-folder-picker");
+    this.contentEl.addClass("notecraft-ai-folder-picker");
     this.contentEl.createEl("h2", { text: `${knowledgeModeTitle(this.plugin.settings)} ${uiText(this.plugin.settings, "folders")}` });
     this.contentEl.createEl("p", {
-      cls: "md-ai-writer-settings-note",
+      cls: "notecraft-ai-settings-note",
       text: isEn
         ? "Choose folders used as the search scope. If none are selected, the whole vault is searched and local keywords narrow the candidate snippets first."
         : "勾選要用作記憶搜尋範圍的資料夾。未勾選時會搜尋全庫，並先用本地關鍵字縮小候選片段。"
     });
 
-    const actions = this.contentEl.createDiv({ cls: "md-ai-writer-folder-actions" });
+    const actions = this.contentEl.createDiv({ cls: "notecraft-ai-folder-actions" });
     actions.createEl("button", { text: isEn ? "Select all" : "全選" }).onclick = () => {
       this.selected = new Set(this.plugin.getVaultFolders());
       this.onOpen();
@@ -2229,12 +2229,12 @@ class KnowledgeFolderModal extends Modal {
     };
 
     const folders = this.plugin.getVaultFolders();
-    const list = this.contentEl.createDiv({ cls: "md-ai-writer-folder-list" });
+    const list = this.contentEl.createDiv({ cls: "notecraft-ai-folder-list" });
     if (!folders.length) {
-      list.createDiv({ cls: "md-ai-writer-muted", text: isEn ? "No folders available." : "未找到可選資料夾。" });
+      list.createDiv({ cls: "notecraft-ai-muted", text: isEn ? "No folders available." : "未找到可選資料夾。" });
     }
     for (const folder of folders) {
-      const label = list.createEl("label", { cls: "md-ai-writer-folder-row" });
+      const label = list.createEl("label", { cls: "notecraft-ai-folder-row" });
       const checkbox = label.createEl("input", { attr: { type: "checkbox" } });
       checkbox.checked = this.selected.has(folder);
       checkbox.onchange = () => {
@@ -2259,10 +2259,10 @@ class KnowledgeFolderModal extends Modal {
 }
 
 class SuggestedPromptModal extends Modal {
-  plugin: MdAiWriterPlugin;
+  plugin: NoteCraftAiPlugin;
   onSelect: (prompt: string) => void;
 
-  constructor(app: App, plugin: MdAiWriterPlugin, onSelect: (prompt: string) => void) {
+  constructor(app: App, plugin: NoteCraftAiPlugin, onSelect: (prompt: string) => void) {
     super(app);
     this.plugin = plugin;
     this.onSelect = onSelect;
@@ -2270,12 +2270,12 @@ class SuggestedPromptModal extends Modal {
 
   onOpen() {
     this.contentEl.empty();
-    this.contentEl.addClass("md-ai-writer-picker");
+    this.contentEl.addClass("notecraft-ai-picker");
     this.contentEl.createEl("h2", { text: "Custom Prompts" });
     for (const prompt of this.plugin.getQuickPrompts()) {
-      const row = this.contentEl.createEl("button", { cls: "md-ai-writer-model-row" });
+      const row = this.contentEl.createEl("button", { cls: "notecraft-ai-model-row" });
       row.createSpan({ text: prompt.name });
-      row.createSpan({ cls: "md-ai-writer-model-provider", text: prompt.prompt });
+      row.createSpan({ cls: "notecraft-ai-model-provider", text: prompt.prompt });
       row.onclick = () => {
         this.onSelect(prompt.prompt);
         this.close();
@@ -2297,7 +2297,7 @@ class CliOutputModal extends Modal {
   onOpen() {
     this.contentEl.empty();
     this.contentEl.createEl("h2", { text: this.title });
-    this.contentEl.createEl("pre", { cls: "md-ai-writer-preview", text: this.output });
+    this.contentEl.createEl("pre", { cls: "notecraft-ai-preview", text: this.output });
     new Setting(this.contentEl).addButton((button) => button.setButtonText("關閉").onClick(() => this.close()));
   }
 }
@@ -2319,7 +2319,7 @@ class PromptModal extends Modal {
     this.contentEl.empty();
     this.contentEl.createEl("h2", { text: this.title });
     this.valueEl = this.contentEl.createEl("textarea", {
-      cls: "md-ai-writer-modal-textarea",
+      cls: "notecraft-ai-modal-textarea",
       attr: { placeholder: this.placeholder }
     });
     new Setting(this.contentEl)
@@ -2361,7 +2361,7 @@ class CreateNoteModal extends Modal {
       text.setPlaceholder("folder/new-note.md");
     });
     this.promptEl = this.contentEl.createEl("textarea", {
-      cls: "md-ai-writer-modal-textarea",
+      cls: "notecraft-ai-modal-textarea",
       attr: { placeholder: "描述要新建的筆記內容..." }
     });
     new Setting(this.contentEl)
@@ -2402,7 +2402,7 @@ class ConfirmActionsModal extends Modal {
     const preview = this.actions
       .map((action, index) => `${index + 1}. ${action.action} ${action.path ?? "(active selection)"}\n${action.content.slice(0, 700)}`)
       .join("\n\n---\n\n");
-    this.contentEl.createDiv({ cls: "md-ai-writer-preview", text: preview });
+    this.contentEl.createDiv({ cls: "notecraft-ai-preview", text: preview });
     new Setting(this.contentEl)
       .addButton((button) => button.setButtonText("取消").onClick(() => this.close()))
       .addButton((button) =>
@@ -2421,11 +2421,11 @@ class ConfirmActionsModal extends Modal {
   }
 }
 
-class MdAiWriterSettingTab extends PluginSettingTab {
-  plugin: MdAiWriterPlugin;
+class NoteCraftAiSettingTab extends PluginSettingTab {
+  plugin: NoteCraftAiPlugin;
   activeTab: "basic" | "model" | "command" | "knowledge" | "advanced" = "basic";
 
-  constructor(app: App, plugin: MdAiWriterPlugin) {
+  constructor(app: App, plugin: NoteCraftAiPlugin) {
     super(app, plugin);
     this.plugin = plugin;
   }
@@ -2434,7 +2434,7 @@ class MdAiWriterSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     containerEl.createEl("h2", { text: this.plugin.settings.uiLanguage === "en" ? `${APP_NAME} Settings` : `${APP_NAME} 設定` });
-    containerEl.createEl("p", { cls: "md-ai-writer-settings-note", text: `Version: ${this.plugin.manifest.version || "dev"}` });
+    containerEl.createEl("p", { cls: "notecraft-ai-settings-note", text: `Version: ${this.plugin.manifest.version || "dev"}` });
     this.renderTabs(containerEl);
     if (this.activeTab === "basic") this.renderBasic(containerEl);
     if (this.activeTab === "model") this.renderModel(containerEl);
@@ -2444,7 +2444,7 @@ class MdAiWriterSettingTab extends PluginSettingTab {
   }
 
   renderTabs(containerEl: HTMLElement) {
-    const tabs = containerEl.createDiv({ cls: "md-ai-writer-settings-tabs" });
+    const tabs = containerEl.createDiv({ cls: "notecraft-ai-settings-tabs" });
     const isEn = this.plugin.settings.uiLanguage === "en";
     const items: Array<[typeof this.activeTab, string]> = [
       ["basic", isEn ? "Basic" : "基本"],
@@ -2691,9 +2691,9 @@ class MdAiWriterSettingTab extends PluginSettingTab {
         })
       );
 
-    const list = containerEl.createDiv({ cls: "md-ai-writer-prompt-settings-list" });
+    const list = containerEl.createDiv({ cls: "notecraft-ai-prompt-settings-list" });
     this.plugin.getQuickPrompts().forEach((prompt, index) => {
-      const row = list.createDiv({ cls: "md-ai-writer-prompt-setting" });
+      const row = list.createDiv({ cls: "notecraft-ai-prompt-setting" });
       new Setting(row)
         .setName(isEn ? "Name" : "名稱")
         .addText((text) =>
@@ -2736,7 +2736,7 @@ class MdAiWriterSettingTab extends PluginSettingTab {
     const isEn = this.plugin.settings.uiLanguage === "en";
     containerEl.createEl("h3", { text: isEn ? "Search" : "搜尋" });
     containerEl.createEl("p", {
-      cls: "md-ai-writer-settings-note",
+      cls: "notecraft-ai-settings-note",
       text: isEn
         ? "Search reads Markdown from selected folders, splits notes into chunks, narrows candidates locally, optionally reranks with Voyage, then answers with the main chat model. Voyage is used for cheaper and more accurate retrieval ranking, not chat."
         : "搜尋模式會先從勾選資料夾讀取 Markdown，切成片段，本地關鍵字預篩後可交給 Voyage rerank 排序，再用主聊天模型回答。Voyage 不是聊天模型，主要用於更便宜、更準確的檢索排序。"
@@ -2807,7 +2807,7 @@ class MdAiWriterSettingTab extends PluginSettingTab {
     containerEl.createEl("h3", { text: isEn ? "Advanced" : "進階" });
     containerEl.createEl("h3", { text: isEn ? "Settings profile" : "設定配置檔" });
     containerEl.createEl("p", {
-      cls: "md-ai-writer-settings-note",
+      cls: "notecraft-ai-settings-note",
       text: isEn
         ? `Exports and imports plugin configuration from a Markdown file with a ${SETTINGS_PROFILE_CODE_BLOCK} JSON block. The exported file includes API keys, so keep it private.`
         : `從包含 ${SETTINGS_PROFILE_CODE_BLOCK} JSON 區塊的 Markdown 檔匯入/匯出插件配置。匯出的文件包含 API Key，請勿公開。`
@@ -2881,8 +2881,8 @@ class MdAiWriterSettingTab extends PluginSettingTab {
 
   renderAgent(containerEl: HTMLElement) {
     containerEl.createEl("h3", { text: "Autonomous Agent" });
-    containerEl.createEl("p", { cls: "md-ai-writer-settings-note", text: "Toggle which tools the AI can use. Web/Search/YouTube/CLI are UI-ready placeholders; file tools are enforced by this plugin." });
-    const panel = containerEl.createDiv({ cls: "md-ai-writer-agent-tools" });
+    containerEl.createEl("p", { cls: "notecraft-ai-settings-note", text: "Toggle which tools the AI can use. Web/Search/YouTube/CLI are UI-ready placeholders; file tools are enforced by this plugin." });
+    const panel = containerEl.createDiv({ cls: "notecraft-ai-agent-tools" });
     const tools: Array<[keyof Settings["agentTools"], string, string]> = [
       ["vaultSearch", "Vault Search", "Search through your vault notes"],
       ["webSearch", "Web Search", "Search the INTERNET when explicitly requested"],
@@ -2953,7 +2953,7 @@ class MdAiWriterSettingTab extends PluginSettingTab {
 
   renderProviderDetails(containerEl: HTMLElement, provider: ProviderId, title: string, customId?: string) {
     const isEn = this.plugin.settings.uiLanguage === "en";
-    const details = containerEl.createEl("details", { cls: "md-ai-writer-settings-group" });
+    const details = containerEl.createEl("details", { cls: "notecraft-ai-settings-group" });
     details.open = provider === this.plugin.settings.provider && (provider === "deepseek" || customId === this.plugin.settings.activeCustomProviderId);
     details.createEl("summary", { text: title });
     const config = this.plugin.getProviderConfig(provider, customId);
@@ -3681,7 +3681,7 @@ function isKnowledgeNoisePath(path: string): boolean {
   if (lower.startsWith(".obsidian/")) return true;
   if (lower.includes("codex_handoff")) return true;
   if (path.includes("插件更新日誌")) return true;
-  if (lower.endsWith("/readme.md") && lower.includes("md-ai-writer")) return true;
+  if (lower.endsWith("/readme.md") && (lower.includes("md-ai-writer") || lower.includes("notecraft-ai"))) return true;
   return false;
 }
 
