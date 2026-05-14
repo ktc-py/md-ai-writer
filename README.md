@@ -15,6 +15,8 @@ Plugin id: `md-ai-writer`
 - Multiple Markdown notes and previous chat sessions can be attached as context.
 - Command to reference the current Markdown note, with default hotkey `Ctrl/Cmd+Shift+R`.
 - Saved chat history can be opened back into the chat panel as a session.
+- File creation uses sanitized vault-relative paths and automatically picks a numbered filename when a create target already exists.
+- Failed file actions and chat workflow errors are appended to `notecraft-ai/bug-log.md`.
 - User-managed quick prompts through `/`.
 - Chinese and English UI language setting.
 - Configurable interface font.
@@ -72,7 +74,9 @@ The plugin stores local settings in Obsidian's plugin data file, normally:
 
 This file can contain API keys and is intentionally ignored by Git.
 
-Settings can also be exported to a private Markdown profile from inside the plugin. Do not commit exported profiles if they include API keys.
+Settings can also be exported to a private Markdown profile from inside the plugin. The default vault folder for user-facing NoteCraft AI files is `notecraft-ai/`.
+
+The technical plugin id and Obsidian installation folder remain `md-ai-writer` for compatibility. User-facing vault files use the `notecraft-ai` name.
 
 ## Privacy
 

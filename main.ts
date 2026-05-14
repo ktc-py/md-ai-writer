@@ -21,7 +21,13 @@ declare const require: (module: string) => { execFile?: ExecFileFn };
 const VIEW_TYPE = "md-ai-writer-view";
 const APP_NAME = "NoteCraft AI";
 const SETTINGS_PROFILE_CODE_BLOCK = "notecraft-ai-settings";
-const DEFAULT_SETTINGS_PROFILE_PATH = "md-ai-writer/settings-profile.md";
+const PRODUCT_FOLDER_PATH = "notecraft-ai";
+const LEGACY_PRODUCT_FOLDER_PATH = "md-ai-writer";
+const DEFAULT_MEMORY_FILE_PATH = `${PRODUCT_FOLDER_PATH}/memory.md`;
+const DEFAULT_BUG_LOG_FILE_PATH = `${PRODUCT_FOLDER_PATH}/bug-log.md`;
+const DEFAULT_SETTINGS_PROFILE_PATH = `${PRODUCT_FOLDER_PATH}/settings-profile.md`;
+const LEGACY_SETTINGS_PROFILE_PATH = `${LEGACY_PRODUCT_FOLDER_PATH}/settings-profile.md`;
+const LEGACY_MEMORY_FILE_PATH = `${LEGACY_PRODUCT_FOLDER_PATH}/memory.md`;
 
 type ChatRole = "system" | "user" | "assistant";
 type ProviderId = "deepseek" | "custom";
@@ -88,6 +94,7 @@ interface Settings {
   chatHistory: ChatHistoryItem[];
   enableMemory: boolean;
   memoryFilePath: string;
+  bugLogFilePath: string;
   agentTools: Record<string, boolean>;
   obsidianCliPath: string;
   obsidianCliVault: string;
@@ -304,7 +311,8 @@ const DEFAULT_SETTINGS: Settings = {
   suggestedPrompts: "",
   chatHistory: [],
   enableMemory: true,
-  memoryFilePath: "md-ai-writer/memory.md",
+  memoryFilePath: DEFAULT_MEMORY_FILE_PATH,
+  bugLogFilePath: DEFAULT_BUG_LOG_FILE_PATH,
   agentTools: {
     vaultSearch: true,
     webSearch: false,
@@ -424,6 +432,12 @@ export default class MdAiWriterPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: "open-bug-log",
+      name: "NoteCraft AI: open bug log",
+      callback: () => void this.openBugLog()
+    });
+
+    this.addCommand({
       id: "insert-ai-answer",
       name: "AI 回答並插入到游標",
       editorCallback: (editor) => {
@@ -483,6 +497,28 @@ export default class MdAiWriterPlugin extends Plugin {
   async addCurrentNoteToActiveViewContext() {
     await this.activateView();
     this.getOpenView()?.addCurrentNoteContext();
+  }
+
+  async openBugLog() {
+    const path = normalizeMarkdownPath(this.settings.bugLogFilePath || DEFAULT_BUG_LOG_FILE_PATH);
+    let file = this.app.vault.getAbstractFileByPath(path);
+    if (!file) {
+      await ensureFolder(this.app, path);
+      await this.app.vault.create(path, `# ${APP_NAME} Bug Log\n\n`);
+      file = this.app.vault.getAbstractFileByPath(path);
+    }
+    if (!(file instanceof TFile)) throw new Error(`Bug log path is not a file: ${path}`);
+    await this.app.workspace.getLeaf(false).openFile(file);
+  }
+
+  async logBug(scope: string, error: unknown, details: Record<string, unknown> = {}) {
+    const configuredPath = this.settings.bugLogFilePath || DEFAULT_BUG_LOG_FILE_PATH;
+    try {
+      const entry = buildBugLogEntry(scope, error, details);
+      await this.appendFile(configuredPath, entry);
+    } catch (logError) {
+      console.warn(`${APP_NAME} bug log write failed`, logError);
+    }
   }
 
   async loadSettings() {
@@ -644,7 +680,8 @@ export default class MdAiWriterPlugin extends Plugin {
       "You are in New mode. Create a new Markdown note in the vault. " +
       "Return one or more create_file actions. If the user provides a target path, use it. " +
       'If no target path is provided, choose a concise Traditional Chinese title and put the note under "AI Notes/". ' +
-      "Do not overwrite existing files. Use the provided context as source material when relevant.\n\n" +
+      "Do not overwrite existing files; the plugin will pick a numbered filename if the target already exists. " +
+      "Use the provided context as source material when relevant.\n\n" +
       `User request:\n${prompt}`;
     const actions = await this.planFileActions(request, context);
     return actions.map((action) =>
@@ -984,6 +1021,7 @@ export default class MdAiWriterPlugin extends Plugin {
 
   async runActions(actions: FileAction[]) {
     for (const action of actions) {
+      try {
       if (action.action === "replace_selection") {
         if (!this.settings.agentTools.editFile) throw new Error("Edit File 工具未啟用。");
         const view = this.getActiveMarkdownView();
@@ -999,6 +1037,10 @@ export default class MdAiWriterPlugin extends Plugin {
       if (action.action === "create_file") await this.createOrReplaceFile(action.path, action.content, true);
       if (action.action === "replace_file" || action.action === "update") await this.createOrReplaceFile(action.path, action.content, false);
       if (action.action === "append_file") await this.appendFile(action.path, action.content);
+      } catch (error) {
+        await this.logBug("file action failed", error, { action });
+        throw error;
+      }
     }
     new Notice(`已套用 ${actions.length} 個 AI 操作。`);
   }
@@ -1078,16 +1120,33 @@ ${assistantAnswer}`;
     }
   }
 
-  async createOrReplaceFile(path: string, content: string, failIfExists: boolean) {
+  async createOrReplaceFile(path: string, content: string, failIfExists: boolean): Promise<string> {
     const normalized = normalizeMarkdownPath(path);
-    const existing = this.app.vault.getAbstractFileByPath(normalized);
+    const targetPath = failIfExists ? this.getAvailableMarkdownPath(normalized) : normalized;
+    const existing = this.app.vault.getAbstractFileByPath(targetPath);
     if (existing instanceof TFile) {
       if (failIfExists) throw new Error(`文件已存在：${normalized}`);
       await this.app.vault.process(existing, () => content);
-      return;
+      return targetPath;
     }
-    await ensureFolder(this.app, normalized);
-    await this.app.vault.create(normalized, content);
+    if (existing) throw new Error(`Cannot write Markdown because the target path is a folder: ${targetPath}`);
+    await ensureFolder(this.app, targetPath);
+    await this.app.vault.create(targetPath, content);
+    if (targetPath !== normalized) {
+      new Notice(`Target already existed. Created instead: ${targetPath}`);
+    }
+    return targetPath;
+  }
+
+  getAvailableMarkdownPath(path: string): string {
+    const normalized = normalizeMarkdownPath(path);
+    if (!this.app.vault.getAbstractFileByPath(normalized)) return normalized;
+    const withoutExt = normalized.replace(/\.md$/i, "");
+    for (let index = 2; index < 1000; index++) {
+      const candidate = `${withoutExt} ${index}.md`;
+      if (!this.app.vault.getAbstractFileByPath(candidate)) return candidate;
+    }
+    throw new Error(`Could not find an available filename for: ${normalized}`);
   }
 
   async appendFile(path: string, content: string) {
@@ -1097,6 +1156,7 @@ ${assistantAnswer}`;
       await this.app.vault.process(existing, (current) => `${current}${current.endsWith("\n") ? "" : "\n\n"}${content}`);
       return;
     }
+    if (existing) throw new Error(`Cannot append Markdown because the target path is a folder: ${normalized}`);
     await ensureFolder(this.app, normalized);
     await this.app.vault.create(normalized, content);
   }
@@ -1269,7 +1329,8 @@ class AiWriterView extends ItemView {
   refreshModeUi() {
     if (this.subtitleEl) {
       const label = modeLabel(this.plugin.settings, this.mode);
-      this.subtitleEl.setText(this.plugin.settings.uiLanguage === "en" ? `Mode: ${label}` : `目前模式：${label}`);
+      const version = this.plugin.manifest.version || "dev";
+      this.subtitleEl.setText(this.plugin.settings.uiLanguage === "en" ? `v${version} · Mode: ${label}` : `v${version} · 目前模式：${label}`);
     }
     if (this.modeSelector) {
       for (const button of Array.from(this.modeSelector.querySelectorAll("button"))) {
@@ -1623,6 +1684,7 @@ class AiWriterView extends ItemView {
       this.addLog("assistant", answer);
       this.recordAssistantAnswer(prompt, answer);
     } catch (error) {
+      await this.plugin.logBug("chat workflow failed", error, { prompt, mode: this.mode });
       new Notice(String(error));
       this.updateProgress(progress, uiText(this.plugin.settings, "progressFailed"));
       this.addLog("error", String(error));
@@ -1642,6 +1704,7 @@ class AiWriterView extends ItemView {
       this.addLog("assistant", `已規劃 ${actions.length} 個文件操作。`);
       await this.plugin.applyActions(actions);
     } catch (error) {
+      await this.plugin.logBug("manual file action failed", error, { prompt });
       new Notice(String(error));
       this.addLog("error", String(error));
     }
@@ -1658,6 +1721,7 @@ class AiWriterView extends ItemView {
       await this.plugin.editActiveNote(prompt);
       this.addLog("assistant", "已產生修改方案，請在確認窗口檢查後套用。");
     } catch (error) {
+      await this.plugin.logBug("edit active note failed", error, { prompt });
       new Notice(String(error));
       this.addLog("error", String(error));
     }
@@ -1665,10 +1729,16 @@ class AiWriterView extends ItemView {
 
   createNote() {
     new CreateNoteModal(this.app, async (path, prompt) => {
-      const content = await this.plugin.completeText(`Create a Markdown note at ${path} for this request:\n${prompt}`, "");
-      await this.plugin.createOrReplaceFile(path, content, false);
-      await this.plugin.rememberPrompt(prompt);
-      this.addLog("assistant", `已新建/更新：${normalizeMarkdownPath(path)}`);
+      try {
+        const content = await this.plugin.completeText(`Create a Markdown note at ${path} for this request:\n${prompt}`, "");
+        const createdPath = await this.plugin.createOrReplaceFile(path, content, false);
+        await this.plugin.rememberPrompt(prompt);
+        this.addLog("assistant", `Created/updated: ${createdPath}`);
+      } catch (error) {
+        await this.plugin.logBug("create note modal failed", error, { path, prompt });
+        new Notice(String(error));
+        this.addLog("error", String(error));
+      }
     }).open();
   }
 }
@@ -2364,6 +2434,7 @@ class MdAiWriterSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     containerEl.createEl("h2", { text: this.plugin.settings.uiLanguage === "en" ? `${APP_NAME} Settings` : `${APP_NAME} 設定` });
+    containerEl.createEl("p", { cls: "md-ai-writer-settings-note", text: `Version: ${this.plugin.manifest.version || "dev"}` });
     this.renderTabs(containerEl);
     if (this.activeTab === "basic") this.renderBasic(containerEl);
     if (this.activeTab === "model") this.renderModel(containerEl);
@@ -2593,11 +2664,30 @@ class MdAiWriterSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Memory file")
-      .setDesc(isEn ? "For example: md-ai-writer/memory.md." : "例如 md-ai-writer/memory.md。")
+      .setDesc(isEn ? `For example: ${DEFAULT_MEMORY_FILE_PATH}.` : `例如：${DEFAULT_MEMORY_FILE_PATH}`)
       .addText((text) =>
         text.setValue(this.plugin.settings.memoryFilePath).onChange(async (value) => {
-          this.plugin.settings.memoryFilePath = value.trim();
+          this.plugin.settings.memoryFilePath = normalizeMarkdownPath(value || DEFAULT_MEMORY_FILE_PATH);
           await this.plugin.saveSettings();
+        })
+      );
+
+    new Setting(containerEl)
+      .setName("Bug log file")
+      .setDesc(isEn ? "Failed file actions and chat workflow errors are written here." : "文件操作或對話流程失敗時會寫入這份日誌。")
+      .addText((text) =>
+        text.setValue(this.plugin.settings.bugLogFilePath).onChange(async (value) => {
+          this.plugin.settings.bugLogFilePath = normalizeMarkdownPath(value || DEFAULT_BUG_LOG_FILE_PATH);
+          await this.plugin.saveSettings();
+        })
+      )
+      .addButton((button) =>
+        button.setButtonText(isEn ? "Open" : "打開").onClick(async () => {
+          try {
+            await this.plugin.openBugLog();
+          } catch (error) {
+            new CliOutputModal(this.app, isEn ? "Open bug log failed" : "打開 bug log 失敗", String(error)).open();
+          }
         })
       );
 
@@ -3095,7 +3185,8 @@ function normalizeSettings(raw: unknown): Settings {
         ? parseSuggestedPrompts(saved.suggestedPrompts).map((prompt) => ({ name: prompt.title, prompt: prompt.body }))
         : DEFAULT_SETTINGS.quickPrompts,
     enableMemory: saved.enableMemory ?? DEFAULT_SETTINGS.enableMemory,
-    memoryFilePath: saved.memoryFilePath ?? DEFAULT_SETTINGS.memoryFilePath,
+    memoryFilePath: normalizeUserDataPath(saved.memoryFilePath, DEFAULT_SETTINGS.memoryFilePath, LEGACY_MEMORY_FILE_PATH),
+    bugLogFilePath: normalizeUserDataPath(saved.bugLogFilePath, DEFAULT_SETTINGS.bugLogFilePath),
     agentTools: {
       ...DEFAULT_SETTINGS.agentTools,
       ...(saved.agentTools ?? {})
@@ -3110,7 +3201,7 @@ function normalizeSettings(raw: unknown): Settings {
     knowledgeTopK: clampNumber(saved.knowledgeTopK ?? DEFAULT_SETTINGS.knowledgeTopK, 1, MAX_KNOWLEDGE_TOP_K, DEFAULT_SETTINGS.knowledgeTopK),
     uiLanguage: isUiLanguage(saved.uiLanguage) ? saved.uiLanguage : DEFAULT_SETTINGS.uiLanguage,
     uiFontFamily: typeof saved.uiFontFamily === "string" && saved.uiFontFamily.trim() ? saved.uiFontFamily : DEFAULT_SETTINGS.uiFontFamily,
-    settingsProfilePath: typeof saved.settingsProfilePath === "string" && saved.settingsProfilePath.trim() ? normalizeMarkdownPath(saved.settingsProfilePath) : DEFAULT_SETTINGS.settingsProfilePath,
+    settingsProfilePath: normalizeUserDataPath(saved.settingsProfilePath, DEFAULT_SETTINGS.settingsProfilePath, LEGACY_SETTINGS_PROFILE_PATH),
     providers: {
       deepseek: {
         ...DEFAULT_SETTINGS.providers.deepseek,
@@ -3145,6 +3236,12 @@ function normalizeSettings(raw: unknown): Settings {
   settings.agentTools.editFile = true;
 
   return settings;
+}
+
+function normalizeUserDataPath(value: unknown, fallback: string, legacyPath?: string): string {
+  if (typeof value !== "string" || !value.trim()) return fallback;
+  const normalized = normalizeMarkdownPath(value);
+  return legacyPath && normalized === normalizeMarkdownPath(legacyPath) ? fallback : normalized;
 }
 
 function normalizeCustomProviders(raw: unknown, legacyCustom: ProviderConfig, activeId: unknown): CustomProviderConfig[] {
@@ -3245,6 +3342,7 @@ function createSettingsProfile(settings: Settings): Partial<Settings> {
     quickPrompts: settings.quickPrompts,
     enableMemory: settings.enableMemory,
     memoryFilePath: settings.memoryFilePath,
+    bugLogFilePath: settings.bugLogFilePath,
     agentTools: settings.agentTools,
     obsidianCliPath: settings.obsidianCliPath,
     obsidianCliVault: settings.obsidianCliVault,
@@ -3913,9 +4011,80 @@ function extractActionJsonBlocks(raw: string): string[] {
   return blocks;
 }
 
+function buildBugLogEntry(scope: string, error: unknown, details: Record<string, unknown>): string {
+  const time = formatMemoryTime(new Date());
+  const detailText = JSON.stringify(redactBugLogValue(details), null, 2);
+  return `## ${time} - ${scope}
+
+**Error:** ${formatErrorForLog(error)}
+
+**Details**
+
+\`\`\`json
+${detailText}
+\`\`\`
+`;
+}
+
+function formatErrorForLog(error: unknown): string {
+  if (error instanceof Error) return `${error.name}: ${error.message}${error.stack ? `\n\n${error.stack}` : ""}`;
+  return String(error);
+}
+
+function redactBugLogValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.slice(0, 20).map(redactBugLogValue);
+  if (value && typeof value === "object") {
+    const output: Record<string, unknown> = {};
+    for (const [key, inner] of Object.entries(value as Record<string, unknown>)) {
+      if (/api.?key|authorization|token|secret/i.test(key)) {
+        output[key] = "[redacted]";
+      } else if (key === "content" || key === "context" || key === "answer") {
+        output[key] = typeof inner === "string" ? truncateLogString(inner, 2000) : redactBugLogValue(inner);
+      } else {
+        output[key] = redactBugLogValue(inner);
+      }
+    }
+    return output;
+  }
+  return typeof value === "string" ? truncateLogString(value, 4000) : value;
+}
+
+function truncateLogString(value: string, maxChars: number): string {
+  if (value.length <= maxChars) return value;
+  return `${value.slice(0, maxChars).trim()}\n...[truncated ${value.length - maxChars} chars]`;
+}
+
 function normalizeMarkdownPath(path: string): string {
-  const normalized = normalizePath(path.trim());
+  const normalized = normalizePath(sanitizeMarkdownPath(path));
   return normalized.toLowerCase().endsWith(".md") ? normalized : `${normalized}.md`;
+}
+
+function sanitizeMarkdownPath(path: string): string {
+  const cleaned = path
+    .trim()
+    .replace(/^```(?:\w+)?|```$/g, "")
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .replace(/\\/g, "/")
+    .replace(/^\/+|\/+$/g, "");
+  const parts = cleaned
+    .split("/")
+    .map((part) => part.trim())
+    .filter((part) => part && part !== "." && part !== "..")
+    .map(sanitizePathSegment);
+  if (!parts.length) throw new Error("Markdown path is empty.");
+  const normalized = normalizePath(parts.join("/"));
+  if (normalized.startsWith(".obsidian/")) throw new Error("Writing into .obsidian is not allowed.");
+  return normalized;
+}
+
+function sanitizePathSegment(segment: string): string {
+  const sanitized = segment
+    .replace(/[<>:"|?*\u0000-\u001f]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[. ]+$/g, "")
+    .slice(0, 120);
+  return sanitized || "Untitled";
 }
 
 async function ensureFolder(app: App, filePath: string) {
@@ -3923,7 +4092,10 @@ async function ensureFolder(app: App, filePath: string) {
   let current = "";
   for (const part of parts) {
     current = current ? `${current}/${part}` : part;
-    if (!app.vault.getAbstractFileByPath(current)) {
+    const existing = app.vault.getAbstractFileByPath(current);
+    if (existing instanceof TFolder) continue;
+    if (existing) throw new Error(`Cannot create folder because a file already exists at: ${current}`);
+    if (!existing) {
       await app.vault.createFolder(current);
     }
   }
