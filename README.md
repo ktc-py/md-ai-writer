@@ -32,7 +32,7 @@ Plugin id: `notecraft-ai`
 4. Enter this repository URL:
 
 ```text
-https://github.com/ktc-py/md-ai-writer
+https://github.com/ktc-py/notecraft-ai
 ```
 
 5. Enable the plugin after installation.
@@ -86,8 +86,6 @@ Version `0.2.0` changes the Obsidian plugin id and install folder to `notecraft-
 ```
 
 Obsidian will treat this as a new plugin identity, so enabled state and hotkeys may need to be re-enabled once.
-
-The target repository name is `ktc-py/notecraft-ai`. Until the GitHub repository is renamed in GitHub settings, BRAT should keep using the existing repository URL above.
 
 ## Privacy
 
